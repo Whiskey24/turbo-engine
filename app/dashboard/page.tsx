@@ -1,29 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Wallet, Landmark, TrendingUp } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
+import type { PortfolioAssetWithTypeName } from "@/lib/database";
+import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 
 interface AggregatedChartData {
     name: string;
     value: number;
-}
-
-// Explicitly tell TypeScript how Supabase represents this singular join row
-interface CleanedAssetRow {
-    id: string;
-    name: string;
-    asset_types: {
-        name: string;
-    } | null;
-}
-
-interface CleanedValuationRow {
-    asset_id: string;
-    balance_amount: number;
-    valuation_date: string;
 }
 
 // Tailored dashboard chart palette matrix
@@ -38,69 +25,58 @@ export default function DashboardAnalyticsPage() {
     const [totalPortfolioValue, setTotalPortfolioValue] = useState(0);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        async function calculateLatestDistribution() {
-            try {
-                setLoading(true);
+    const loadDashboard = useCallback(async () => {
+        try {
+            setLoading(true);
 
-                // 1. Fetch assets joined with their structural type name template
-                const { data: assets, error: assetErr } = await supabase
-                    .from("portfolio_assets")
-                    .select("id, name, asset_types(name)");
+            const { data: assets, error: assetErr } = await supabase
+                .from("portfolio_assets")
+                .select("id, name, asset_types(name)");
 
-                if (assetErr || !assets) throw assetErr;
+            if (assetErr || !assets) throw assetErr;
 
-                // Cast the untyped Supabase array to our precise local interface matrix
-                const typedAssets = assets as unknown as CleanedAssetRow[];
+            const { data: valuations, error: valErr } = await supabase
+                .from("asset_valuations")
+                .select("asset_id, balance_amount, valuation_date")
+                .order("valuation_date", { ascending: false });
 
-                // 2. Fetch entire history log ordered from newest to oldest
-                const { data: valuations, error: valErr } = await supabase
-                    .from("asset_valuations")
-                    .select("asset_id, balance_amount, valuation_date")
-                    .order("valuation_date", { ascending: false }) as { data: CleanedValuationRow[] | null; error: any }; // <-- Cast the type right here!
+            if (valErr || !valuations) throw valErr;
 
-                if (valErr || !valuations) throw valErr;
+            const latestBalancesByAsset: Record<string, number> = {};
+            valuations.forEach((row) => {
+                if (!(row.asset_id in latestBalancesByAsset)) {
+                    latestBalancesByAsset[row.asset_id] = Number(row.balance_amount);
+                }
+            });
 
-                // 3. Keep ONLY the single latest balance for each asset ID
-                const latestBalancesByAsset: Record<string, number> = {};
-                valuations.forEach((row) => {
-                    if (!(row.asset_id in latestBalancesByAsset)) {
-                        latestBalancesByAsset[row.asset_id] = Number(row.balance_amount);
-                    }
-                });
+            const typeSummationMap: Record<string, number> = {};
+            let runningTotalSum = 0;
 
-                // 4. Group those latest valuations by Asset Type Name
-                const typeSummationMap: Record<string, number> = {};
-                let runningTotalSum = 0;
+            assets.forEach((asset: PortfolioAssetWithTypeName) => {
+                const balance = latestBalancesByAsset[asset.id] || 0;
+                const typeName = asset.asset_types?.name || "Unclassified Assets";
 
-                typedAssets.forEach((asset) => {
-                    const balance = latestBalancesByAsset[asset.id] || 0;
+                if (balance > 0) {
+                    typeSummationMap[typeName] = (typeSummationMap[typeName] || 0) + balance;
+                    runningTotalSum += balance;
+                }
+            });
 
-                    // TypeScript is completely happy now because it knows asset_types is an object or null!
-                    const typeName = asset.asset_types?.name || "Unclassified Assets";
+            const compiledData: AggregatedChartData[] = Object.entries(typeSummationMap).map(
+                ([name, value]) => ({ name, value })
+            );
 
-                    if (balance > 0) {
-                        typeSummationMap[typeName] = (typeSummationMap[typeName] || 0) + balance;
-                        runningTotalSum += balance;
-                    }
-                });
-
-                // 5. Transform map object into standard Recharts format layout array
-                const compiledData: AggregatedChartData[] = Object.entries(typeSummationMap).map(
-                    ([name, value]) => ({ name, value })
-                );
-
-                setChartData(compiledData);
-                setTotalPortfolioValue(runningTotalSum);
-            } catch (err: any) {
-                console.error("Aggregation analytics error:", err.message);
-            } finally {
-                setLoading(false);
-            }
+            setChartData(compiledData);
+            setTotalPortfolioValue(runningTotalSum);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Unknown error";
+            console.error("Aggregation analytics error:", message);
+        } finally {
+            setLoading(false);
         }
-
-        calculateLatestDistribution();
     }, []);
+
+    usePortfolioDataRefresh(loadDashboard);
 
     if (loading) {
         return (

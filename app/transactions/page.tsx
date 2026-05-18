@@ -1,35 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Trash2, History, Filter, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
-
-interface Asset {
-    id: string;
-    name: string;
-    institution: string;
-}
-
-interface ValuationLog {
-    id: string;
-    asset_id: string;
-    valuation_date: string;
-    balance_amount: number;
-    portfolio_assets: {
-        name: string;
-        institution: string;
-        // Adjust this object nesting to fetch the joined lookup row parameters cleanly
-        asset_types?: {
-            name: string;
-        };
-    };
-}
-
-interface LastValuationReference {
-    valuation_date: string;
-    balance_amount: number;
-}
+import type { PortfolioAssetSummary, ValuationLedgerRow, ValuationReference } from "@/lib/database";
+import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 
 // Formatting helpers
 const formatToEuroDate = (dateStr: string) => {
@@ -43,8 +19,8 @@ const formatToEuroCurrency = (value: number) => {
 };
 
 export default function TransactionsPage() {
-    const [assets, setAssets] = useState<Asset[]>([]);
-    const [ledger, setLedger] = useState<ValuationLog[]>([]);
+    const [assets, setAssets] = useState<PortfolioAssetSummary[]>([]);
+    const [ledger, setLedger] = useState<ValuationLedgerRow[]>([]);
 
     // Form State
     const [selectedAssetId, setSelectedAssetId] = useState("");
@@ -63,35 +39,10 @@ export default function TransactionsPage() {
     const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
     // Reference Cache State for context visibility
-    const [lastValuation, setLastValuation] = useState<LastValuationReference | null>(null);
+    const [lastValuation, setLastValuation] = useState<ValuationReference | null>(null);
 
     // --- Core Sync Engines ---
-    const fetchInitialData = async () => {
-        // 1. Grab the logged-in user's ID first
-        const { data: { session } } = await supabase.auth.getSession();
-        const currentUserId = session?.user?.id;
-
-        if (!currentUserId) return; // Guardrail if session isn't loaded yet
-
-        // 2. Explicitly cast the returned array to our Asset[] interface model
-        const { data: fetchedAssets } = await supabase
-            .from("portfolio_assets")
-            .select("id, name, institution")
-            .eq("user_id", currentUserId)
-            .order("name", { ascending: true }) as { data: Asset[] | null }; // <-- Cast the type here!
-
-        if (fetchedAssets) {
-            setAssets(fetchedAssets);
-            if (fetchedAssets.length > 0 && !selectedAssetId) {
-                setSelectedAssetId(fetchedAssets[0].id); // TypeScript is completely happy now!
-            }
-        }
-
-        // 3. Grab entire historical valuations accounting track
-        fetchLedger();
-    };
-
-    const fetchLedger = async () => {
+    const fetchLedger = useCallback(async () => {
         // We traverse: asset_valuations -> portfolio_assets -> asset_types(name)
         const { data: logs } = await supabase
             .from("asset_valuations")
@@ -108,8 +59,37 @@ export default function TransactionsPage() {
         `)
             .order("valuation_date", { ascending: false });
 
-        if (logs) setLedger(logs as any);
-    };
+        if (logs) setLedger(logs);
+    }, []);
+
+    const fetchInitialData = useCallback(async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const currentUserId = session?.user?.id;
+
+        if (!currentUserId) return;
+
+        const { data: fetchedAssets } = await supabase
+            .from("portfolio_assets")
+            .select("id, name, institution")
+            .eq("user_id", currentUserId)
+            .order("name", { ascending: true });
+
+        if (fetchedAssets) {
+            setAssets(fetchedAssets);
+            setSelectedAssetId((current) => {
+                if (fetchedAssets.length === 0) return "";
+                if (current && fetchedAssets.some((asset) => asset.id === current)) return current;
+                return fetchedAssets[0].id;
+            });
+        } else {
+            setAssets([]);
+            setSelectedAssetId("");
+        }
+
+        await fetchLedger();
+    }, [fetchLedger]);
+
+    usePortfolioDataRefresh(fetchInitialData);
 
     const fetchLastValuationReference = async (assetId: string) => {
         if (!assetId) {
@@ -117,27 +97,19 @@ export default function TransactionsPage() {
             return;
         }
 
-        // Explicitly type cast the result block to map our reference fields correctly
         const { data, error } = await supabase
             .from("asset_valuations")
             .select("valuation_date, balance_amount")
             .eq("asset_id", assetId)
             .order("valuation_date", { ascending: false })
-            .limit(1) as { data: LastValuationReference[] | null, error: any }; // <-- Cast the type here!
+            .limit(1);
 
         if (!error && data && data.length > 0) {
-            setLastValuation({
-                valuation_date: data[0].valuation_date,
-                balance_amount: Number(data[0].balance_amount)
-            });
+            setLastValuation(data[0]);
         } else {
             setLastValuation(null);
         }
     };
-
-    useEffect(() => {
-        fetchInitialData();
-    }, []);
 
     useEffect(() => {
         fetchLastValuationReference(selectedAssetId);
@@ -164,14 +136,13 @@ export default function TransactionsPage() {
 
         setLoading(true);
 
-        // Explicitly type cast the insertion array object using 'as any' to satisfy the strict schema check
         const { error } = await supabase.from("asset_valuations").insert([
             {
                 asset_id: selectedAssetId,
                 valuation_date: valuationDate,
-                balance_amount: parseFloat(balanceAmount)
-            }
-        ] as any); // <-- Add 'as any' right here!
+                balance_amount: parseFloat(balanceAmount),
+            },
+        ]);
 
         setLoading(false);
         if (!error) {

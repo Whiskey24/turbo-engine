@@ -1,36 +1,15 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Trash2 } from "lucide-react"; // Imported for cleanup actions
 
 import { supabase } from "@/lib/supabase";
-
-interface DbAssetType {
-    id: string;
-    name: string;
-    requires_iban: boolean;
-    requires_ticker: boolean;
-    requires_isin: boolean;
-}
-
-interface Asset {
-    id: string;
-    name: string;
-    institution: string;
-    login_url: string;
-    comments: string;
-    iban?: string;
-    isin?: string;
-    ticker?: string;
-    type_id: string;
-    asset_types?: {
-        name: string;
-    };
-}
+import type { AssetType, PortfolioAssetWithType } from "@/lib/database";
+import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 
 export default function MasterDataPage() {
-    const [types, setTypes] = useState<DbAssetType[]>([]);
-    const [assets, setAssets] = useState<Asset[]>([]);
+    const [types, setTypes] = useState<AssetType[]>([]);
+    const [assets, setAssets] = useState<PortfolioAssetWithType[]>([]);
 
     // Form States
     const [newTypeName, setNewTypeName] = useState("");
@@ -50,42 +29,39 @@ export default function MasterDataPage() {
     const [loadingType, setLoadingType] = useState(false);
     const [loadingAsset, setLoadingAsset] = useState(false);
 
-    const fetchData = async () => {
-        // 1. Explicitly assert the shape of the returning asset categories array
+    const fetchData = useCallback(async () => {
         const { data: fetchTypes } = await supabase
             .from("asset_types")
             .select("*")
-            .order("name", { ascending: true }) as { data: DbAssetType[] | null };
+            .order("name", { ascending: true });
 
-        // 2. Explicitly assert the shape of the returning portfolio assets array
         const { data: fetchAssets } = await supabase
             .from("portfolio_assets")
             .select("*, asset_types(name)")
-            .order("name", { ascending: true }) as { data: Asset[] | null };
+            .order("name", { ascending: true });
 
         if (fetchTypes) {
             setTypes(fetchTypes);
-            if (fetchTypes.length > 0 && !selectedTypeId) {
-                setSelectedTypeId(fetchTypes[0].id); // TypeScript is perfectly happy now!
-            }
+            setSelectedTypeId((current) => {
+                if (fetchTypes.length === 0) return "";
+                if (current && fetchTypes.some((type) => type.id === current)) return current;
+                return fetchTypes[0].id;
+            });
         }
         if (fetchAssets) {
             setAssets(fetchAssets);
         }
-    };
-
-    useEffect(() => {
-        fetchData();
     }, []);
+
+    usePortfolioDataRefresh(fetchData);
 
     const handleCreateType = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoadingType(true);
 
-        // Explicitly type cast the insertion array object using 'as any' to satisfy the strict schema check
         const { error } = await supabase.from("asset_types").insert([
-            { name: newTypeName, requires_iban: reqIban, requires_ticker: reqTicker, requires_isin: reqIsin }
-        ] as any); // <-- Add 'as any' right here!
+            { name: newTypeName, requires_iban: reqIban, requires_ticker: reqTicker, requires_isin: reqIsin },
+        ]);
 
         setLoadingType(false);
         if (!error) {
@@ -114,8 +90,8 @@ export default function MasterDataPage() {
                 iban: activeType?.requires_iban ? iban : null,
                 ticker: activeType?.requires_ticker ? ticker.toUpperCase() : null,
                 isin: activeType?.requires_isin ? isin.toUpperCase() : null,
-            }
-        ] as any); // <-- Add 'as any' here as well to protect this function!
+            },
+        ]);
 
         setLoadingAsset(false);
         if (!error) {

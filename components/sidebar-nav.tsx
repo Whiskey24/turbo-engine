@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
+import DataTransferActions from "@/components/data-transfer-actions";
+import DeleteAllDataAction from "@/components/delete-all-data-action";
 
 const navigationItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -40,7 +42,6 @@ export default function SidebarNav() {
                 <p className="text-xs text-muted-foreground">Asset Portfolio Console</p>
             </div>
 
-            {/* Added flex-1 to the navigation element container to push items down appropriately */}
             <nav className="flex flex-row md:flex-col flex-1 gap-1 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
                 {navigationItems.map((item) => {
                     const Icon = item.icon;
@@ -62,16 +63,19 @@ export default function SidebarNav() {
                         </Link>
                     );
                 })}
+            </nav>
 
-                {/* DYNAMIC LOGOUT COMPONENT ROW */}
+            <div className="mt-auto space-y-1">
+                <DataTransferActions />
+                <DeleteAllDataAction />
                 <button
                     onClick={handleLogout}
-                    className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition text-muted-foreground hover:bg-destructive/10 hover:text-destructive md:mt-auto ml-4 md:ml-0 whitespace-nowrap cursor-pointer"
+                    className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition text-muted-foreground hover:bg-destructive/10 hover:text-destructive whitespace-nowrap cursor-pointer"
                 >
                     <LogOut className="h-4 w-4 shrink-0" />
                     <span>Sign Out</span>
                 </button>
-            </nav>
+            </div>
         </aside>
     );
 }

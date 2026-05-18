@@ -1,0 +1,71 @@
+import type { QueryData } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
+import type { Tables, TablesInsert } from "@/lib/database.types";
+
+export type { Database, Tables, TablesInsert } from "@/lib/database.types";
+
+export type AssetType = Tables<"asset_types">;
+export type PortfolioAsset = Tables<"portfolio_assets">;
+export type AssetValuation = Tables<"asset_valuations">;
+
+export type AssetTypeInsert = TablesInsert<"asset_types">;
+export type PortfolioAssetInsert = TablesInsert<"portfolio_assets">;
+export type AssetValuationInsert = TablesInsert<"asset_valuations">;
+
+const portfolioAssetWithTypeQuery = supabase
+    .from("portfolio_assets")
+    .select("*, asset_types(name)");
+
+export type PortfolioAssetWithType = QueryData<typeof portfolioAssetWithTypeQuery>[number];
+
+const portfolioAssetSummaryQuery = supabase
+    .from("portfolio_assets")
+    .select("id, name, institution");
+
+export type PortfolioAssetSummary = QueryData<typeof portfolioAssetSummaryQuery>[number];
+
+const portfolioAssetWithTypeNameQuery = supabase
+    .from("portfolio_assets")
+    .select("id, name, asset_types(name)");
+
+export type PortfolioAssetWithTypeName = QueryData<typeof portfolioAssetWithTypeNameQuery>[number];
+
+const valuationLedgerQuery = supabase.from("asset_valuations").select(`
+    id,
+    asset_id,
+    valuation_date,
+    balance_amount,
+    portfolio_assets(
+        name,
+        institution,
+        asset_types(name)
+    )
+`);
+
+export type ValuationLedgerRow = QueryData<typeof valuationLedgerQuery>[number];
+
+const valuationReferenceQuery = supabase
+    .from("asset_valuations")
+    .select("valuation_date, balance_amount");
+
+export type ValuationReference = QueryData<typeof valuationReferenceQuery>[number];
+
+const exportAssetTypeQuery = supabase
+    .from("asset_types")
+    .select("name, requires_iban, requires_ticker, requires_isin");
+
+export type ExportAssetTypeRow = QueryData<typeof exportAssetTypeQuery>[number];
+
+const exportAssetQuery = supabase
+    .from("portfolio_assets")
+    .select("name, institution, login_url, comments, iban, ticker, isin, asset_types(name)");
+
+export type ExportAssetRow = QueryData<typeof exportAssetQuery>[number];
+
+const exportValuationQuery = supabase.from("asset_valuations").select(`
+    valuation_date,
+    balance_amount,
+    portfolio_assets!inner(name, institution, user_id)
+`);
+
+export type ExportValuationRow = QueryData<typeof exportValuationQuery>[number];
