@@ -57,12 +57,13 @@ export default function DeleteAllDataAction() {
 
             {open && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+                    className="fixed inset-0 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+                    style={{ zIndex: 9999 }}
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="delete-all-data-title"
                 >
-                    <div className="w-full max-w-md rounded-xl border bg-card p-5 shadow-lg">
+                    <div className="relative w-full max-w-md rounded-xl border bg-card p-5 shadow-lg" style={{ zIndex: 10000 }}>
                         <div className="mb-4 flex items-start justify-between gap-3">
                             <div>
                                 <h3

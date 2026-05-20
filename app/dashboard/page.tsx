@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, Label } from "recharts";
 import { Wallet, Landmark, TrendingUp } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
@@ -11,17 +11,39 @@ import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 interface AggregatedChartData {
     name: string;
     value: number;
+    percentage?: number;
+}
+
+interface AssetWithBalance {
+    id: string;
+    name: string;
+    typeName: string;
+    balance: number;
+}
+
+interface AssetTableRow {
+    assetId: string;
+    assetName: string;
+    assetType: string;
+    balance: number;
 }
 
 // Tailored dashboard chart palette matrix
 const CHART_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#7c3aed", "#ec4899", "#06b6d4", "#ef4444"];
 
 const formatEuro = (num: number) => {
-    return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(num);
+    return new Intl.NumberFormat("nl-NL", {
+        style: "currency",
+        currency: "EUR",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(num);
 };
 
 export default function DashboardAnalyticsPage() {
     const [chartData, setChartData] = useState<AggregatedChartData[]>([]);
+    const [assetTableRows, setAssetTableRows] = useState<AssetTableRow[]>([]);
+    const [assetTypes, setAssetTypes] = useState<string[]>([]);
     const [totalPortfolioValue, setTotalPortfolioValue] = useState(0);
     const [loading, setLoading] = useState(true);
 
@@ -50,6 +72,8 @@ export default function DashboardAnalyticsPage() {
             });
 
             const typeSummationMap: Record<string, number> = {};
+            const tableRows: AssetTableRow[] = [];
+            const uniqueTypes = new Set<string>();
             let runningTotalSum = 0;
 
             assets.forEach((asset: PortfolioAssetWithTypeName) => {
@@ -59,6 +83,14 @@ export default function DashboardAnalyticsPage() {
                 if (balance > 0) {
                     typeSummationMap[typeName] = (typeSummationMap[typeName] || 0) + balance;
                     runningTotalSum += balance;
+                    uniqueTypes.add(typeName);
+
+                    tableRows.push({
+                        assetId: asset.id,
+                        assetName: asset.name,
+                        assetType: typeName,
+                        balance
+                    });
                 }
             });
 
@@ -66,7 +98,25 @@ export default function DashboardAnalyticsPage() {
                 ([name, value]) => ({ name, value })
             );
 
+            // Sort asset types by total value (descending)
+            const sortedTypes = Array.from(uniqueTypes).sort((a, b) =>
+                (typeSummationMap[b] || 0) - (typeSummationMap[a] || 0)
+            );
+
+            // Sort table rows by asset type (using sorted types order), then by asset name
+            tableRows.sort((a, b) => {
+                const typeIndexA = sortedTypes.indexOf(a.assetType);
+                const typeIndexB = sortedTypes.indexOf(b.assetType);
+
+                if (typeIndexA !== typeIndexB) {
+                    return typeIndexA - typeIndexB;
+                }
+                return a.assetName.localeCompare(b.assetName);
+            });
+
             setChartData(compiledData);
+            setAssetTableRows(tableRows);
+            setAssetTypes(sortedTypes);
             setTotalPortfolioValue(runningTotalSum);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Unknown error";
@@ -151,7 +201,7 @@ export default function DashboardAnalyticsPage() {
                                 Add valuation checkpoints inside the transactional ledger to generate data visualization layers.
                             </div>
                         ) : (
-                            <div className="w-full h-72">
+                            <div className="w-full h-96">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
@@ -159,10 +209,33 @@ export default function DashboardAnalyticsPage() {
                                             dataKey="value"
                                             nameKey="name"
                                             cx="50%"
-                                            cy="40%"
-                                            innerRadius={65}
-                                            outerRadius={95}
-                                            paddingAngle={3}
+                                            cy="50%"
+                                            outerRadius={100}
+                                            paddingAngle={2}
+                                            label={({ cx, cy, midAngle, outerRadius, name, value }) => {
+                                                const RADIAN = Math.PI / 180;
+                                                const radius = outerRadius + 30;
+                                                const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                                const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                                const percentage = ((value / totalPortfolioValue) * 100).toFixed(1);
+
+                                                return (
+                                                    <text
+                                                        x={x}
+                                                        y={y}
+                                                        fill="hsl(var(--foreground))"
+                                                        textAnchor={x > cx ? 'start' : 'end'}
+                                                        dominantBaseline="central"
+                                                        className="text-xs font-medium"
+                                                    >
+                                                        {`${name}: ${percentage}%`}
+                                                    </text>
+                                                );
+                                            }}
+                                            labelLine={{
+                                                stroke: "hsl(var(--border))",
+                                                strokeWidth: 1
+                                            }}
                                         >
                                             {chartData.map((entry, index) => (
                                                 <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
@@ -172,7 +245,6 @@ export default function DashboardAnalyticsPage() {
                                             formatter={(value: number) => [formatEuro(value), "Total Value"]}
                                             contentStyle={{ background: "hsl(var(--card))", borderRadius: "8px", border: "1px solid hsl(var(--border))", fontSize: "11px" }}
                                         />
-                                        <Legend verticalAlign="bottom" height={40} iconType="circle" wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }} />
                                     </PieChart>
                                 </ResponsiveContainer>
                             </div>
@@ -208,6 +280,62 @@ export default function DashboardAnalyticsPage() {
                     </div>
                 </div>
             </div>
+
+            {/* ASSET VALUATION TABLE BY TYPE */}
+            {assetTableRows.length > 0 && (
+                <Card className="shadow-sm">
+                    <CardHeader>
+                        <CardTitle className="text-base">Asset Valuations by Type</CardTitle>
+                        <CardDescription>Latest valuation breakdown with assets as rows and types as columns.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b">
+                                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Asset Name</th>
+                                        {assetTypes.map((typeName, idx) => (
+                                            <th key={typeName} className="text-right py-3 px-4 font-semibold text-muted-foreground">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }} />
+                                                    {typeName}
+                                                </div>
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {assetTableRows.map((row, index) => (
+                                        <tr key={row.assetId} className={`border-b hover:bg-muted/30 transition ${index % 2 === 0 ? 'bg-muted/20' : ''}`}>
+                                            <td className="py-2 px-4 text-foreground font-medium">
+                                                {row.assetName}
+                                            </td>
+                                            {assetTypes.map((typeName) => (
+                                                <td key={typeName} className="py-2 px-4 text-right font-mono text-foreground">
+                                                    {row.assetType === typeName ? formatEuro(row.balance) : ''}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                    <tr className="border-t-2 bg-muted/20 font-bold">
+                                        <td className="py-3 px-4 text-foreground">Total</td>
+                                        {assetTypes.map((typeName) => {
+                                            const total = assetTableRows
+                                                .filter(row => row.assetType === typeName)
+                                                .reduce((sum, row) => sum + row.balance, 0);
+                                            return (
+                                                <td key={typeName} className="py-3 px-4 text-right font-mono text-foreground">
+                                                    {formatEuro(total)}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 }

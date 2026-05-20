@@ -1,15 +1,31 @@
 "use client";
 import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Trash2 } from "lucide-react"; // Imported for cleanup actions
+import { Trash2, Pencil, X } from "lucide-react"; // Imported for cleanup actions
 
 import { supabase } from "@/lib/supabase";
 import type { AssetType, PortfolioAssetWithType } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 
+const formatToEuroDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const [year, month, day] = dateStr.split("-");
+    return `${day}-${month}-${year}`;
+};
+
+const formatToEuroCurrency = (value: number) => {
+    return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(value);
+};
+
+interface LatestValuation {
+    balance_amount: number;
+    valuation_date: string;
+}
+
 export default function MasterDataPage() {
     const [types, setTypes] = useState<AssetType[]>([]);
     const [assets, setAssets] = useState<PortfolioAssetWithType[]>([]);
+    const [latestValuations, setLatestValuations] = useState<Record<string, LatestValuation>>({});
 
     // Form States
     const [newTypeName, setNewTypeName] = useState("");
@@ -29,6 +45,18 @@ export default function MasterDataPage() {
     const [loadingType, setLoadingType] = useState(false);
     const [loadingAsset, setLoadingAsset] = useState(false);
 
+    // Edit Asset Dialog State
+    const [editingAsset, setEditingAsset] = useState<PortfolioAssetWithType | null>(null);
+    const [editTypeId, setEditTypeId] = useState("");
+    const [editName, setEditName] = useState("");
+    const [editInstitution, setEditInstitution] = useState("");
+    const [editLoginUrl, setEditLoginUrl] = useState("");
+    const [editComments, setEditComments] = useState("");
+    const [editIban, setEditIban] = useState("");
+    const [editTicker, setEditTicker] = useState("");
+    const [editIsin, setEditIsin] = useState("");
+    const [loadingEdit, setLoadingEdit] = useState(false);
+
     const fetchData = useCallback(async () => {
         const { data: fetchTypes } = await supabase
             .from("asset_types")
@@ -40,6 +68,11 @@ export default function MasterDataPage() {
             .select("*, asset_types(name)")
             .order("name", { ascending: true });
 
+        const { data: fetchValuations } = await supabase
+            .from("asset_valuations")
+            .select("asset_id, balance_amount, valuation_date")
+            .order("valuation_date", { ascending: false });
+
         if (fetchTypes) {
             setTypes(fetchTypes);
             setSelectedTypeId((current) => {
@@ -50,6 +83,18 @@ export default function MasterDataPage() {
         }
         if (fetchAssets) {
             setAssets(fetchAssets);
+        }
+        if (fetchValuations) {
+            const latest: Record<string, LatestValuation> = {};
+            fetchValuations.forEach((row) => {
+                if (!(row.asset_id in latest)) {
+                    latest[row.asset_id] = {
+                        balance_amount: Number(row.balance_amount),
+                        valuation_date: row.valuation_date,
+                    };
+                }
+            });
+            setLatestValuations(latest);
         }
     }, []);
 
@@ -123,6 +168,54 @@ export default function MasterDataPage() {
             }
         } else {
             fetchData();
+        }
+    };
+
+    // --- EDIT DIALOG HANDLERS ---
+    const openEditDialog = (asset: PortfolioAssetWithType) => {
+        setEditingAsset(asset);
+        setEditTypeId(asset.type_id);
+        setEditName(asset.name);
+        setEditInstitution(asset.institution);
+        setEditLoginUrl(asset.login_url || "");
+        setEditComments(asset.comments || "");
+        setEditIban(asset.iban || "");
+        setEditTicker(asset.ticker || "");
+        setEditIsin(asset.isin || "");
+    };
+
+    const closeEditDialog = () => {
+        if (loadingEdit) return;
+        setEditingAsset(null);
+    };
+
+    const handleUpdateAsset = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingAsset) return;
+
+        setLoadingEdit(true);
+        const activeType = types.find(t => t.id === editTypeId);
+
+        const { error } = await supabase
+            .from("portfolio_assets")
+            .update({
+                type_id: editTypeId,
+                name: editName,
+                institution: editInstitution,
+                login_url: editLoginUrl || null,
+                comments: editComments || null,
+                iban: activeType?.requires_iban ? editIban : null,
+                ticker: activeType?.requires_ticker ? editTicker.toUpperCase() : null,
+                isin: activeType?.requires_isin ? editIsin.toUpperCase() : null,
+            })
+            .eq("id", editingAsset.id);
+
+        setLoadingEdit(false);
+        if (!error) {
+            setEditingAsset(null);
+            fetchData();
+        } else {
+            alert(`Error updating asset: ${error.message}`);
         }
     };
 
@@ -318,19 +411,36 @@ export default function MasterDataPage() {
                                                     {asset.asset_types?.name || "Asset"}
                                                 </span>
                                             </div>
-                                            {/* Floating Trash Action button */}
-                                            <button
-                                                onClick={() => handleDeleteAsset(asset.id, asset.name)}
-                                                className="absolute top-4 right-4 text-muted-foreground hover:text-destructive p-1 rounded transition opacity-0 group-hover:opacity-100"
-                                                title="Remove account entry profile"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
+                                            {/* Floating Hover Action buttons */}
+                                            <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                                                <button
+                                                    onClick={() => openEditDialog(asset)}
+                                                    className="text-muted-foreground hover:text-primary p-1 rounded transition"
+                                                    title="Edit asset profile"
+                                                >
+                                                    <Pencil className="h-4 w-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteAsset(asset.id, asset.name)}
+                                                    className="text-muted-foreground hover:text-destructive p-1 rounded transition"
+                                                    title="Remove account entry profile"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </button>
+                                            </div>
                                         </CardHeader>
                                         <CardContent className="text-xs space-y-1.5 text-muted-foreground pt-0">
                                             {asset.iban && <p><span className="font-medium text-foreground">IBAN:</span> {asset.iban}</p>}
                                             {asset.ticker && <p><span className="font-medium text-foreground">Ticker:</span> {asset.ticker}</p>}
                                             {asset.isin && <p><span className="font-medium text-foreground">ISIN:</span> {asset.isin}</p>}
+                                            {latestValuations[asset.id] ? (
+                                                <div className="flex justify-between items-center border-t pt-1.5 mt-1.5 text-foreground">
+                                                    <span>Last Valuation: <strong className="font-medium">{formatToEuroDate(latestValuations[asset.id].valuation_date)}</strong></span>
+                                                    <span className="font-bold text-primary">{formatToEuroCurrency(latestValuations[asset.id].balance_amount)}</span>
+                                                </div>
+                                            ) : (
+                                                <p className="italic border-t pt-1.5 mt-1.5">No valuation logged yet.</p>
+                                            )}
                                             {asset.comments && <p className="italic border-t pt-1.5 mt-1.5">{asset.comments}</p>}
                                         </CardContent>
                                     </Card>
@@ -341,6 +451,113 @@ export default function MasterDataPage() {
                 </div>
 
             </div>
+
+            {/* EDIT ASSET DIALOG OVERLAY */}
+            {editingAsset && (() => {
+                const editActiveRuleSet = types.find(t => t.id === editTypeId);
+                return (
+                    <div
+                        className="fixed inset-0 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+                        style={{ zIndex: 9999 }}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="edit-asset-title"
+                    >
+                        <div className="relative w-full max-w-2xl rounded-xl border bg-card p-5 shadow-lg max-h-[90vh] overflow-y-auto" style={{ zIndex: 10000 }}>
+                            <div className="mb-4 flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 id="edit-asset-title" className="text-base font-semibold text-foreground">
+                                        Edit Asset Profile
+                                    </h3>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        Update structural and identifying parameters for this account.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={closeEditDialog}
+                                    disabled={loadingEdit}
+                                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                    aria-label="Close"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleUpdateAsset} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Mapped Asset Type Definition</label>
+                                    <select
+                                        value={editTypeId} onChange={(e) => setEditTypeId(e.target.value)}
+                                        className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
+                                    >
+                                        {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                    </select>
+                                </div>
+
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Account Description Name</label>
+                                    <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="border rounded-md p-2 bg-background text-sm" required />
+                                </div>
+
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Custodian Bank / Broker</label>
+                                    <input type="text" value={editInstitution} onChange={(e) => setEditInstitution(e.target.value)} className="border rounded-md p-2 bg-background text-sm" required />
+                                </div>
+
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Login Portal Url (Optional)</label>
+                                    <input type="url" value={editLoginUrl} onChange={(e) => setEditLoginUrl(e.target.value)} placeholder="https://login.bank.com" className="border rounded-md p-2 bg-background text-sm" />
+                                </div>
+
+                                {editActiveRuleSet?.requires_iban && (
+                                    <div className="flex flex-col gap-1.5 md:col-span-2">
+                                        <label className="text-xs font-medium text-muted-foreground">IBAN Number</label>
+                                        <input type="text" value={editIban} onChange={(e) => setEditIban(e.target.value)} placeholder="NL00 BANK 0123 4567 89" className="border rounded-md p-2 bg-background text-sm uppercase" required />
+                                    </div>
+                                )}
+
+                                {editActiveRuleSet?.requires_ticker && (
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">Ticker Symbol</label>
+                                        <input type="text" value={editTicker} onChange={(e) => setEditTicker(e.target.value)} placeholder="e.g., AAPL, BTC" className="border rounded-md p-2 bg-background text-sm uppercase" required />
+                                    </div>
+                                )}
+
+                                {editActiveRuleSet?.requires_isin && (
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">ISIN Number</label>
+                                        <input type="text" value={editIsin} onChange={(e) => setEditIsin(e.target.value)} placeholder="US0378331002" className="border rounded-md p-2 bg-background text-sm uppercase" required />
+                                    </div>
+                                )}
+
+                                <div className="flex flex-col gap-1.5 md:col-span-2">
+                                    <label className="text-xs font-medium text-muted-foreground">Comments / Internal Allocation Directives</label>
+                                    <textarea value={editComments} onChange={(e) => setEditComments(e.target.value)} className="border rounded-md p-2 bg-background text-sm min-h-16" />
+                                </div>
+
+                                <div className="md:col-span-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={closeEditDialog}
+                                        disabled={loadingEdit}
+                                        className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={loadingEdit}
+                                        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                                    >
+                                        {loadingEdit ? "Saving..." : "Save changes"}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 }

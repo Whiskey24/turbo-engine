@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
 import {
     LayoutDashboard,
     Database,
@@ -9,7 +10,8 @@ import {
     TrendingUp,
     PieChart,
     BarChart3,
-    LogOut // Added the logout action icon
+    LogOut,
+    User
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
@@ -27,6 +29,15 @@ const navigationItems = [
 
 export default function SidebarNav() {
     const pathname = usePathname();
+    const [userEmail, setUserEmail] = useState<string | null>(null);
+
+    useEffect(() => {
+        const getUserEmail = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            setUserEmail(user?.email || null);
+        };
+        getUserEmail();
+    }, []);
 
     const handleLogout = async () => {
         if (confirm("Are you sure you want to sign out of your profile session?")) {
@@ -36,7 +47,7 @@ export default function SidebarNav() {
     };
 
     return (
-        <aside className="w-full md:w-64 border-r bg-card flex flex-col h-auto md:h-screen sticky top-0 px-4 py-6 text-card-foreground">
+        <aside className="w-full md:w-64 border-r bg-card flex flex-col h-auto md:h-screen sticky top-0 px-4 py-6 text-card-foreground z-10">
             <div className="mb-8 px-2">
                 <h2 className="text-lg font-bold tracking-tight text-foreground">Turbo Engine</h2>
                 <p className="text-xs text-muted-foreground">Asset Portfolio Console</p>
@@ -75,6 +86,12 @@ export default function SidebarNav() {
                     <LogOut className="h-4 w-4 shrink-0" />
                     <span>Sign Out</span>
                 </button>
+                {userEmail && (
+                    <div className="flex items-center gap-2 px-3 pt-2 text-xs text-muted-foreground/70 truncate">
+                        <User className="h-3 w-3 shrink-0" />
+                        <span className="truncate" title={userEmail}>{userEmail}</span>
+                    </div>
+                )}
             </div>
         </aside>
     );
