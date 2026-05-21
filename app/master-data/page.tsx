@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Trash2, Pencil, X } from "lucide-react"; // Imported for cleanup actions
@@ -15,6 +16,25 @@ const formatToEuroDate = (dateStr: string) => {
 
 const formatToEuroCurrency = (value: number) => {
     return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(value);
+};
+
+const formatIBAN = (iban: string) => {
+    if (!iban) return "";
+    const clean = iban.replace(/\s+/g, "").toUpperCase();
+    const country = clean.substring(0, 2);
+
+    // Common bank code lengths in IBAN structure (positions starting at index 4)
+    const bankCodeLengths: Record<string, number> = {
+        NL: 4, DE: 8, BE: 3, FR: 5, ES: 4, GB: 4, AT: 5
+    };
+
+    const len = bankCodeLengths[country] || 4;
+    const first4 = clean.substring(0, 4);
+    const bankCode = clean.substring(4, 4 + len);
+    const rest = clean.substring(4 + len);
+    const restFormatted = rest.match(/.{1,4}/g)?.join(" ") || "";
+
+    return `${first4} ${bankCode} ${restFormatted}`.trim().replace(/\s+/g, " ");
 };
 
 interface LatestValuation {
@@ -402,7 +422,7 @@ export default function MasterDataPage() {
                                 {assets.map((asset) => (
                                     <Card key={asset.id} className="shadow-sm relative group">
                                         <CardHeader className="pb-2">
-                                            <div className="flex justify-between items-start pr-6">
+                                            <div className="flex justify-between items-start pr-8">
                                                 <div>
                                                     <CardTitle className="text-sm font-bold">{asset.name}</CardTitle>
                                                     <CardDescription className="text-xs">{asset.institution}</CardDescription>
@@ -412,7 +432,7 @@ export default function MasterDataPage() {
                                                 </span>
                                             </div>
                                             {/* Floating Hover Action buttons */}
-                                            <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                                            <div className="absolute top-4 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition">
                                                 <button
                                                     onClick={() => openEditDialog(asset)}
                                                     className="text-muted-foreground hover:text-primary p-1 rounded transition"
@@ -430,7 +450,7 @@ export default function MasterDataPage() {
                                             </div>
                                         </CardHeader>
                                         <CardContent className="text-xs space-y-1.5 text-muted-foreground pt-0">
-                                            {asset.iban && <p><span className="font-medium text-foreground">IBAN:</span> {asset.iban}</p>}
+                                            {asset.iban && <p><span className="font-medium text-foreground">IBAN:</span> {formatIBAN(asset.iban)}</p>}
                                             {asset.ticker && <p><span className="font-medium text-foreground">Ticker:</span> {asset.ticker}</p>}
                                             {asset.isin && <p><span className="font-medium text-foreground">ISIN:</span> {asset.isin}</p>}
                                             {latestValuations[asset.id] ? (

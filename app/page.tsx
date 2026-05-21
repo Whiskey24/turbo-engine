@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { redirect } from "next/navigation"; // Added for routing mechanics
 import { User } from "@supabase/supabase-js";

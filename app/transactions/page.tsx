@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Trash2, History, Filter, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
