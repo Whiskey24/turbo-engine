@@ -15,8 +15,6 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
-import DataTransferActions from "@/components/data-transfer-actions";
-import DeleteAllDataAction from "@/components/delete-all-data-action";
 
 const navigationItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -25,6 +23,7 @@ const navigationItems = [
     { name: "Live Market Prices", href: "/market-prices", icon: TrendingUp },
     { name: "Current Allocations", href: "/charts-allocation", icon: PieChart },
     { name: "Historical Timelines", href: "/charts-history", icon: BarChart3 },
+    { name: "Settings", href: "/settings", icon: User },
 ];
 
 export default function SidebarNav() {
@@ -77,8 +76,6 @@ export default function SidebarNav() {
             </nav>
 
             <div className="mt-auto space-y-1">
-                <DataTransferActions />
-                <DeleteAllDataAction />
                 <button
                     onClick={handleLogout}
                     className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition text-muted-foreground hover:bg-destructive/10 hover:text-destructive whitespace-nowrap cursor-pointer"
