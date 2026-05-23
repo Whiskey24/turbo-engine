@@ -49,6 +49,11 @@ export default function SettingsPage() {
           <DeleteAllDataAction />
         </div>
       </div>
+      
+      <div className="mt-8 pt-4 border-t text-sm text-muted-foreground text-right">
+        <div>Version: {process.env.NEXT_PUBLIC_BUILD_NUMBER}</div>
+        <div>Build at: {process.env.NEXT_PUBLIC_BUILD_TIME}</div>
+      </div>
     </div>
   );
 }
