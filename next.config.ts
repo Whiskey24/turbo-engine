@@ -1,16 +1,38 @@
-import type { NextConfig } from "next";
+/** @type {import('next').NextConfig} */
+const { execSync } = require('child_process');
 
-const path = require('path');
-const dotenv = require('dotenv');
+let buildNumber = 'v0.0.0-unknown';
+let buildTime = new Date().toISOString();
 
-// 1. Manually load your build environment file right at the start
-dotenv.config({ path: path.resolve(process.cwd(), '.env.build') });
+try {
+  // 1. Get the latest Git tag/commit version hash synchronously
+  buildNumber = execSync('git describe --tags --always').toString().trim();
+} catch (e) {
+  console.log('⚠️ Git not initialized or no tags found, falling back to commit hash');
+  try {
+    buildNumber = execSync('git rev-parse --short HEAD').toString().trim();
+  } catch (err) {
+    buildNumber = 'v0.9.0-fallback';
+  }
+}
 
-const nextConfig: NextConfig = {
+try {
+  // 2. Format a clean timestamp string
+  const now = new Date();
+  buildTime = now.toISOString().replace('T', ' ').substring(0, 16);
+} catch (e) {
+  // Fallback safely if date manipulation fails
+}
+
+console.log('🚀 VERCEL BUILD ENGINES ACTIVE:', { buildNumber, buildTime });
+
+const nextConfig = {
+  // 3. Bake the values directly into Next.js environment bundle layer 
   env: {
-    NEXT_PUBLIC_BUILD_NUMBER: process.env.NEXT_PUBLIC_BUILD_NUMBER,
-    NEXT_PUBLIC_BUILD_TIME: process.env.NEXT_PUBLIC_BUILD_TIME,
+    NEXT_PUBLIC_BUILD_NUMBER: buildNumber,
+    NEXT_PUBLIC_BUILD_TIME: buildTime,
   },
+  // Keep your normal settings (images, redirects, rewrites, etc.) down here...
 };
 
-export default nextConfig;
+module.exports = nextConfig;
