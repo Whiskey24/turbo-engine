@@ -34,6 +34,15 @@ export default function AuthProviderGate({ children }: { children: React.ReactNo
                 if (pathname !== "/") router.push("/");
             } else {
                 setUser(session.user);
+                if (event === "SIGNED_IN") {
+                    fetch("/api/log-location", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ userId: session.user.id }),
+                    }).catch((err) => console.error("Failed to log geolocation:", err));
+                }
             }
         });
 

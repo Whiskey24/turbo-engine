@@ -65,6 +65,9 @@ export default function LoginHistory() {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               IP Address
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Location
+            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -85,6 +88,9 @@ export default function LoginHistory() {
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {login.ip_address || "Unknown"}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                {login.location || "Unknown"}
               </td>
             </tr>
           ))}
