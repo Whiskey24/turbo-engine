@@ -2,6 +2,7 @@
 
 import DataTransferActions from "@/components/data-transfer-actions";
 import DeleteAllDataAction from "@/components/delete-all-data-action";
+import LoginHistory from "@/components/login-history";
 
 export default function SettingsPage() {
   return (
@@ -26,9 +27,7 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground mb-4">
             View your recent login activity
           </p>
-          <div className="bg-gray-100 rounded-lg p-4 text-center text-gray-500">
-            Login history tracking coming soon
-          </div>
+          <LoginHistory />
         </div>
 
         {/* Backup & Restore Section */}
