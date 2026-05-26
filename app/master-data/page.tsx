@@ -2,12 +2,50 @@
 export const dynamic = "force-dynamic";
 import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Trash2, Pencil, X } from "lucide-react"; // Imported for cleanup actions
+import { Trash2, Pencil, X } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
 import type { AssetType, PortfolioAssetWithType } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 import { formatIBAN } from "@/lib/utils";
+
+const VALID_TYPE_SLUGS = [
+    "BANK_ACCOUNT",
+    "STOCK",
+    "CRYPTO",
+    "FUND_ETF",
+    "REAL_ESTATE",
+    "OTHER",
+] as const;
+
+type SlugRequirements = {
+    requires_iban: boolean;
+    requires_ticker: boolean;
+    requires_isin: boolean;
+};
+
+function getSlugRequirements(slug: string): SlugRequirements {
+    switch (slug) {
+        case "BANK_ACCOUNT":
+            return { requires_iban: true, requires_ticker: false, requires_isin: false };
+        case "STOCK":
+            return { requires_iban: false, requires_ticker: true, requires_isin: false };
+        case "CRYPTO":
+            return { requires_iban: false, requires_ticker: true, requires_isin: false };
+        case "FUND_ETF":
+            return { requires_iban: false, requires_ticker: false, requires_isin: true };
+        case "REAL_ESTATE":
+            return { requires_iban: false, requires_ticker: false, requires_isin: false };
+        case "OTHER":
+            return { requires_iban: false, requires_ticker: false, requires_isin: false };
+        default:
+            return { requires_iban: false, requires_ticker: false, requires_isin: false };
+    }
+}
+
+function requiresForType(type: Pick<AssetType, "type_slug"> | undefined): SlugRequirements {
+    return getSlugRequirements(type?.type_slug ?? "");
+}
 
 const formatToEuroDate = (dateStr: string) => {
     if (!dateStr) return "";
@@ -31,9 +69,7 @@ export default function MasterDataPage() {
 
     // Form States
     const [newTypeName, setNewTypeName] = useState("");
-    const [reqIban, setReqIban] = useState(false);
-    const [reqTicker, setReqTicker] = useState(false);
-    const [reqIsin, setReqIsin] = useState(false);
+    const [typeSlug, setTypeSlug] = useState<string>("");
 
     const [selectedTypeId, setSelectedTypeId] = useState("");
     const [assetName, setAssetName] = useState("");
@@ -59,6 +95,9 @@ export default function MasterDataPage() {
     const [editIsin, setEditIsin] = useState("");
     const [loadingEdit, setLoadingEdit] = useState(false);
 
+    const currentActiveRuleSet = types.find(t => t.id === selectedTypeId);
+    const editRuleSet = types.find(t => t.id === editTypeId);
+
     const fetchData = useCallback(async () => {
         const { data: fetchTypes } = await supabase
             .from("asset_types")
@@ -67,7 +106,7 @@ export default function MasterDataPage() {
 
         const { data: fetchAssets } = await supabase
             .from("portfolio_assets")
-            .select("*, asset_types(name)")
+            .select("*, asset_types(name, type_slug)")
             .order("name", { ascending: true });
 
         const { data: fetchValuations } = await supabase
@@ -104,18 +143,23 @@ export default function MasterDataPage() {
 
     const handleCreateType = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!typeSlug) {
+            alert("Please select an asset type slug.");
+            return;
+        }
         setLoadingType(true);
 
         const { error } = await supabase.from("asset_types").insert([
-            { name: newTypeName, requires_iban: reqIban, requires_ticker: reqTicker, requires_isin: reqIsin },
+            {
+                name: newTypeName,
+                type_slug: typeSlug,
+            },
         ]);
 
         setLoadingType(false);
         if (!error) {
             setNewTypeName("");
-            setReqIban(false);
-            setReqTicker(false);
-            setReqIsin(false);
+            setTypeSlug("");
             fetchData();
         } else {
             alert(`Error creating type: ${error.message}`);
@@ -125,7 +169,7 @@ export default function MasterDataPage() {
     const handleCreateAsset = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoadingAsset(true);
-        const activeType = types.find(t => t.id === selectedTypeId);
+        const reqs = requiresForType(currentActiveRuleSet);
 
         const { error } = await supabase.from("portfolio_assets").insert([
             {
@@ -134,9 +178,9 @@ export default function MasterDataPage() {
                 institution,
                 login_url: loginUrl || null,
                 comments: comments || null,
-                iban: activeType?.requires_iban ? iban : null,
-                ticker: activeType?.requires_ticker ? ticker.toUpperCase() : null,
-                isin: activeType?.requires_isin ? isin.toUpperCase() : null,
+                iban: reqs.requires_iban ? iban : null,
+                ticker: reqs.requires_ticker ? ticker.toUpperCase() : null,
+                isin: reqs.requires_isin ? isin.toUpperCase() : null,
             },
         ]);
 
@@ -162,7 +206,6 @@ export default function MasterDataPage() {
         const { error } = await supabase.from("asset_types").delete().eq("id", id);
 
         if (error) {
-            // Catch foreign key constraint violation code
             if (error.code === "23503") {
                 alert(`Deletion Denied: Cannot delete type "${name}" because active portfolio asset records are currently mapping to it. Remove those accounts first.`);
             } else {
@@ -196,7 +239,7 @@ export default function MasterDataPage() {
         if (!editingAsset) return;
 
         setLoadingEdit(true);
-        const activeType = types.find(t => t.id === editTypeId);
+        const reqs = requiresForType(editRuleSet);
 
         const { error } = await supabase
             .from("portfolio_assets")
@@ -206,9 +249,9 @@ export default function MasterDataPage() {
                 institution: editInstitution,
                 login_url: editLoginUrl || null,
                 comments: editComments || null,
-                iban: activeType?.requires_iban ? editIban : null,
-                ticker: activeType?.requires_ticker ? editTicker.toUpperCase() : null,
-                isin: activeType?.requires_isin ? editIsin.toUpperCase() : null,
+                iban: reqs.requires_iban ? editIban : null,
+                ticker: reqs.requires_ticker ? editTicker.toUpperCase() : null,
+                isin: reqs.requires_isin ? editIsin.toUpperCase() : null,
             })
             .eq("id", editingAsset.id);
 
@@ -237,7 +280,8 @@ export default function MasterDataPage() {
         }
     };
 
-    const currentActiveRuleSet = types.find(t => t.id === selectedTypeId);
+    const createReqs = requiresForType(currentActiveRuleSet);
+    const editReqs = requiresForType(editRuleSet);
 
     return (
         <div className="space-y-8">
@@ -265,21 +309,55 @@ export default function MasterDataPage() {
                                     />
                                 </div>
 
-                                <div className="space-y-2 border rounded-md p-3 bg-muted/40">
-                                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Required Data Parameters:</p>
-                                    <label className="flex items-center gap-2.5 text-sm font-normal cursor-pointer">
-                                        <input type="checkbox" checked={reqIban} onChange={(e) => setReqIban(e.target.checked)} className="rounded accent-primary" />
-                                        <span>Requires IBAN</span>
-                                    </label>
-                                    <label className="flex items-center gap-2.5 text-sm font-normal cursor-pointer">
-                                        <input type="checkbox" checked={reqTicker} onChange={(e) => setReqTicker(e.target.checked)} className="rounded accent-primary" />
-                                        <span>Requires Ticker</span>
-                                    </label>
-                                    <label className="flex items-center gap-2.5 text-sm font-normal cursor-pointer">
-                                        <input type="checkbox" checked={reqIsin} onChange={(e) => setReqIsin(e.target.checked)} className="rounded accent-primary" />
-                                        <span>Requires ISIN</span>
-                                    </label>
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Asset Type Slug</label>
+                                    <select
+                                        value={typeSlug}
+                                        onChange={(e) => setTypeSlug(e.target.value)}
+                                        className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
+                                        required
+                                    >
+                                        <option value="" disabled>-- Select a classification --</option>
+                                        {VALID_TYPE_SLUGS.map((slug) => (
+                                            <option key={slug} value={slug}>{slug}</option>
+                                        ))}
+                                    </select>
                                 </div>
+
+                                {typeSlug && (
+                                    <div className="space-y-2 border rounded-md p-3 bg-muted/40">
+                                        <p className="text-xs font-semibold text-muted-foreground mb-1.5">Required Data Parameters (auto-derived):</p>
+                                        {(() => {
+                                            const reqs = getSlugRequirements(typeSlug);
+                                            const hasAny = reqs.requires_iban || reqs.requires_ticker || reqs.requires_isin;
+                                            if (!hasAny) {
+                                                return <p className="text-xs text-muted-foreground italic">None — no additional parameters required.</p>;
+                                            }
+                                            return (
+                                                <>
+                                                    {reqs.requires_iban && (
+                                                        <div className="flex items-center gap-2.5 text-sm font-normal">
+                                                            <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
+                                                            <span>Requires IBAN</span>
+                                                        </div>
+                                                    )}
+                                                    {reqs.requires_ticker && (
+                                                        <div className="flex items-center gap-2.5 text-sm font-normal">
+                                                            <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
+                                                            <span>Requires Ticker</span>
+                                                        </div>
+                                                    )}
+                                                    {reqs.requires_isin && (
+                                                        <div className="flex items-center gap-2.5 text-sm font-normal">
+                                                            <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
+                                                            <span>Requires ISIN</span>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
 
                                 <button type="submit" disabled={loadingType} className="w-full bg-secondary text-secondary-foreground font-medium py-2 rounded-md transition hover:opacity-90 text-sm">
                                     {loadingType ? "Processing..." : "Register Type Template"}
@@ -294,25 +372,31 @@ export default function MasterDataPage() {
                         <div className="bg-card border rounded-md divide-y text-xs">
                             {types.length === 0 ? (
                                 <p className="p-3 text-muted-foreground text-center">No categories registered.</p>
-                            ) : types.map(t => (
-                                <div key={t.id} className="p-2.5 flex justify-between items-center group">
-                                    <div className="flex flex-col gap-0.5">
-                                        <span className="font-semibold text-foreground">{t.name}</span>
-                                        <div className="flex gap-1 text-[9px] font-mono text-muted-foreground">
-                                            {t.requires_iban && <span>[IBAN]</span>}
-                                            {t.requires_ticker && <span>[TICKER]</span>}
-                                            {t.requires_isin && <span>[ISIN]</span>}
+                            ) : types.map(t => {
+                                const tReqs = requiresForType(t);
+                                return (
+                                    <div key={t.id} className="p-2.5 flex justify-between items-center group">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-semibold text-foreground">{t.name}</span>
+                                            <span className="text-[10px] font-mono text-muted-foreground">
+                                                {t.type_slug ?? "NO_SLUG"}
+                                            </span>
+                                            <div className="flex gap-1 text-[9px] font-mono text-muted-foreground">
+                                                {tReqs.requires_iban && <span>[IBAN]</span>}
+                                                {tReqs.requires_ticker && <span>[TICKER]</span>}
+                                                {tReqs.requires_isin && <span>[ISIN]</span>}
+                                            </div>
                                         </div>
+                                        <button
+                                            onClick={() => handleDeleteType(t.id, t.name)}
+                                            className="text-muted-foreground hover:text-destructive p-1 rounded transition opacity-60 hover:opacity-100"
+                                            title="Remove Type classification"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => handleDeleteType(t.id, t.name)}
-                                        className="text-muted-foreground hover:text-destructive p-1 rounded transition opacity-60 hover:opacity-100"
-                                        title="Remove Type classification"
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -356,21 +440,21 @@ export default function MasterDataPage() {
                                         <input type="url" value={loginUrl} onChange={(e) => setLoginUrl(e.target.value)} placeholder="https://login.bank.com" className="border rounded-md p-2 bg-background text-sm" />
                                     </div>
 
-                                    {currentActiveRuleSet?.requires_iban && (
+                                    {createReqs.requires_iban && (
                                         <div className="flex flex-col gap-1.5 md:col-span-2">
                                             <label className="text-xs font-medium text-muted-foreground">IBAN Number</label>
                                             <input type="text" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="NL00 BANK 0123 4567 89" className="border rounded-md p-2 bg-background text-sm uppercase" required />
                                         </div>
                                     )}
 
-                                    {currentActiveRuleSet?.requires_ticker && (
+                                    {createReqs.requires_ticker && (
                                         <div className="flex flex-col gap-1.5">
                                             <label className="text-xs font-medium text-muted-foreground">Ticker Symbol</label>
                                             <input type="text" value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="e.g., AAPL, BTC" className="border rounded-md p-2 bg-background text-sm uppercase" required />
                                         </div>
                                     )}
 
-                                    {currentActiveRuleSet?.requires_isin && (
+                                    {createReqs.requires_isin && (
                                         <div className="flex flex-col gap-1.5">
                                             <label className="text-xs font-medium text-muted-foreground">ISIN Number</label>
                                             <input type="text" value={isin} onChange={(e) => setIsin(e.target.value)} placeholder="US0378331002" className="border rounded-md p-2 bg-background text-sm uppercase" required />
@@ -455,111 +539,108 @@ export default function MasterDataPage() {
             </div>
 
             {/* EDIT ASSET DIALOG OVERLAY */}
-            {editingAsset && (() => {
-                const editActiveRuleSet = types.find(t => t.id === editTypeId);
-                return (
-                    <div
-                        className="fixed inset-0 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
-                        style={{ zIndex: 9999 }}
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="edit-asset-title"
-                    >
-                        <div className="relative w-full max-w-2xl rounded-xl border bg-card p-5 shadow-lg max-h-[90vh] overflow-y-auto" style={{ zIndex: 10000 }}>
-                            <div className="mb-4 flex items-start justify-between gap-3">
-                                <div>
-                                    <h3 id="edit-asset-title" className="text-base font-semibold text-foreground">
-                                        Edit Asset Profile
-                                    </h3>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        Update structural and identifying parameters for this account.
-                                    </p>
+            {editingAsset && (
+                <div
+                    className="fixed inset-0 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+                    style={{ zIndex: 9999 }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="edit-asset-title"
+                >
+                    <div className="relative w-full max-w-2xl rounded-xl border bg-card p-5 shadow-lg max-h-[90vh] overflow-y-auto" style={{ zIndex: 10000 }}>
+                        <div className="mb-4 flex items-start justify-between gap-3">
+                            <div>
+                                <h3 id="edit-asset-title" className="text-base font-semibold text-foreground">
+                                    Edit Asset Profile
+                                </h3>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Update structural and identifying parameters for this account.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeEditDialog}
+                                disabled={loadingEdit}
+                                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                aria-label="Close"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleUpdateAsset} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Mapped Asset Type Definition</label>
+                                <select
+                                    value={editTypeId} onChange={(e) => setEditTypeId(e.target.value)}
+                                    className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
+                                >
+                                    {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </select>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Account Description Name</label>
+                                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="border rounded-md p-2 bg-background text-sm" required />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Custodian Bank / Broker</label>
+                                <input type="text" value={editInstitution} onChange={(e) => setEditInstitution(e.target.value)} className="border rounded-md p-2 bg-background text-sm" required />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Login Portal Url (Optional)</label>
+                                <input type="url" value={editLoginUrl} onChange={(e) => setEditLoginUrl(e.target.value)} placeholder="https://login.bank.com" className="border rounded-md p-2 bg-background text-sm" />
+                            </div>
+
+                            {editReqs.requires_iban && (
+                                <div className="flex flex-col gap-1.5 md:col-span-2">
+                                    <label className="text-xs font-medium text-muted-foreground">IBAN Number</label>
+                                    <input type="text" value={editIban} onChange={(e) => setEditIban(e.target.value)} placeholder="NL00 BANK 0123 4567 89" className="border rounded-md p-2 bg-background text-sm uppercase" required />
                                 </div>
+                            )}
+
+                            {editReqs.requires_ticker && (
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Ticker Symbol</label>
+                                    <input type="text" value={editTicker} onChange={(e) => setEditTicker(e.target.value)} placeholder="e.g., AAPL, BTC" className="border rounded-md p-2 bg-background text-sm uppercase" required />
+                                </div>
+                            )}
+
+                            {editReqs.requires_isin && (
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">ISIN Number</label>
+                                    <input type="text" value={editIsin} onChange={(e) => setEditIsin(e.target.value)} placeholder="US0378331002" className="border rounded-md p-2 bg-background text-sm uppercase" required />
+                                </div>
+                            )}
+
+                            <div className="flex flex-col gap-1.5 md:col-span-2">
+                                <label className="text-xs font-medium text-muted-foreground">Comments / Internal Allocation Directives</label>
+                                <textarea value={editComments} onChange={(e) => setEditComments(e.target.value)} className="border rounded-md p-2 bg-background text-sm min-h-16" />
+                            </div>
+
+                            <div className="md:col-span-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-2">
                                 <button
                                     type="button"
                                     onClick={closeEditDialog}
                                     disabled={loadingEdit}
-                                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-                                    aria-label="Close"
+                                    className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
                                 >
-                                    <X className="h-4 w-4" />
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={loadingEdit}
+                                    className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                                >
+                                    {loadingEdit ? "Saving..." : "Save changes"}
                                 </button>
                             </div>
-
-                            <form onSubmit={handleUpdateAsset} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Mapped Asset Type Definition</label>
-                                    <select
-                                        value={editTypeId} onChange={(e) => setEditTypeId(e.target.value)}
-                                        className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
-                                    >
-                                        {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                    </select>
-                                </div>
-
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Account Description Name</label>
-                                    <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="border rounded-md p-2 bg-background text-sm" required />
-                                </div>
-
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Custodian Bank / Broker</label>
-                                    <input type="text" value={editInstitution} onChange={(e) => setEditInstitution(e.target.value)} className="border rounded-md p-2 bg-background text-sm" required />
-                                </div>
-
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Login Portal Url (Optional)</label>
-                                    <input type="url" value={editLoginUrl} onChange={(e) => setEditLoginUrl(e.target.value)} placeholder="https://login.bank.com" className="border rounded-md p-2 bg-background text-sm" />
-                                </div>
-
-                                {editActiveRuleSet?.requires_iban && (
-                                    <div className="flex flex-col gap-1.5 md:col-span-2">
-                                        <label className="text-xs font-medium text-muted-foreground">IBAN Number</label>
-                                        <input type="text" value={editIban} onChange={(e) => setEditIban(e.target.value)} placeholder="NL00 BANK 0123 4567 89" className="border rounded-md p-2 bg-background text-sm uppercase" required />
-                                    </div>
-                                )}
-
-                                {editActiveRuleSet?.requires_ticker && (
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-medium text-muted-foreground">Ticker Symbol</label>
-                                        <input type="text" value={editTicker} onChange={(e) => setEditTicker(e.target.value)} placeholder="e.g., AAPL, BTC" className="border rounded-md p-2 bg-background text-sm uppercase" required />
-                                    </div>
-                                )}
-
-                                {editActiveRuleSet?.requires_isin && (
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-medium text-muted-foreground">ISIN Number</label>
-                                        <input type="text" value={editIsin} onChange={(e) => setEditIsin(e.target.value)} placeholder="US0378331002" className="border rounded-md p-2 bg-background text-sm uppercase" required />
-                                    </div>
-                                )}
-
-                                <div className="flex flex-col gap-1.5 md:col-span-2">
-                                    <label className="text-xs font-medium text-muted-foreground">Comments / Internal Allocation Directives</label>
-                                    <textarea value={editComments} onChange={(e) => setEditComments(e.target.value)} className="border rounded-md p-2 bg-background text-sm min-h-16" />
-                                </div>
-
-                                <div className="md:col-span-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-2">
-                                    <button
-                                        type="button"
-                                        onClick={closeEditDialog}
-                                        disabled={loadingEdit}
-                                        className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={loadingEdit}
-                                        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
-                                    >
-                                        {loadingEdit ? "Saving..." : "Save changes"}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                        </form>
                     </div>
-                );
-            })()}
+                </div>
+            )}
         </div>
     );
 }

@@ -56,7 +56,7 @@ export default function DashboardAnalyticsPage() {
 
             const { data: assets, error: assetErr } = await supabase
                 .from("portfolio_assets")
-                .select("id, name, institution, iban, ticker, isin, asset_types(name)");
+                .select("id, name, institution, iban, ticker, isin, asset_types(name, type_slug)");
 
             if (assetErr || !assets) throw assetErr;
 

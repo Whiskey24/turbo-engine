@@ -7,9 +7,9 @@ import type {
     ExportValuationRow,
     PortfolioAssetInsert,
 } from "@/lib/database";
-import { downloadTextFile, normalizeImportKey, parseBoolean, parseTsv, toTsv } from "@/lib/portfolio-tsv";
+import { downloadTextFile, normalizeImportKey, parseTsv, toTsv } from "@/lib/portfolio-tsv";
 
-const ASSET_TYPE_COLUMNS = ["name", "requires_iban", "requires_ticker", "requires_isin"] as const;
+const ASSET_TYPE_COLUMNS = ["name", "type_slug"] as const;
 const ASSET_COLUMNS = [
     "type_name",
     "name",
@@ -21,6 +21,19 @@ const ASSET_COLUMNS = [
     "isin",
 ] as const;
 const TRANSACTION_COLUMNS = ["asset_name", "institution", "valuation_date", "balance_amount"] as const;
+
+const VALID_TYPE_SLUGS = [
+    "BANK_ACCOUNT",
+    "STOCK",
+    "CRYPTO",
+    "FUND_ETF",
+    "REAL_ESTATE",
+    "OTHER",
+] as const;
+
+function isValidSlug(value: string): boolean {
+    return (VALID_TYPE_SLUGS as readonly string[]).includes(value);
+}
 
 type ImportSuccess = { ok: true; imported: number; skipped: number };
 type ImportFailure = { ok: false; message: string };
@@ -48,12 +61,12 @@ export async function exportPortfolioData(): Promise<{ ok: true } | { ok: false;
     ] = await Promise.all([
         supabase
             .from("asset_types")
-            .select("name, requires_iban, requires_ticker, requires_isin")
+            .select("name, type_slug")
             .eq("user_id", userId)
             .order("name"),
         supabase
             .from("portfolio_assets")
-            .select("name, institution, login_url, comments, iban, ticker, isin, asset_types(name)")
+            .select("name, institution, login_url, comments, iban, ticker, isin, asset_types(name, type_slug)")
             .eq("user_id", userId)
             .order("name"),
         supabase
@@ -76,9 +89,7 @@ export async function exportPortfolioData(): Promise<{ ok: true } | { ok: false;
 
     const typeRows = (assetTypes ?? []).map((row: ExportAssetTypeRow) => ({
         name: row.name,
-        requires_iban: String(row.requires_iban),
-        requires_ticker: String(row.requires_ticker),
-        requires_isin: String(row.requires_isin),
+        type_slug: row.type_slug ?? "",
     }));
 
     const assetRows = (assets ?? []).map((row: ExportAssetRow) => ({
@@ -146,13 +157,19 @@ export async function importAssetTypesFromTsv(content: string): Promise<ImportRe
             continue;
         }
 
+        const slug = row.type_slug?.trim() || null;
+        if (slug && !isValidSlug(slug)) {
+            return {
+                ok: false,
+                message: `Invalid type_slug "${slug}" for asset type "${row.name.trim()}". Must be one of: ${VALID_TYPE_SLUGS.join(", ")}.`,
+            };
+        }
+
         seenNames.add(nameKey);
         payload.push({
             user_id: userId,
             name: row.name.trim(),
-            requires_iban: parseBoolean(row.requires_iban ?? ""),
-            requires_ticker: parseBoolean(row.requires_ticker ?? ""),
-            requires_isin: parseBoolean(row.requires_isin ?? ""),
+            type_slug: slug,
         });
     }
 

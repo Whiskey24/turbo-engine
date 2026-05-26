@@ -55,7 +55,7 @@ export default function TransactionsPage() {
             portfolio_assets(
                 name, 
                 institution, 
-                asset_types(name)
+                asset_types(name, type_slug)
             )
         `)
             .order("valuation_date", { ascending: false });
