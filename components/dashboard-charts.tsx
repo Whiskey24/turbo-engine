@@ -1,14 +1,13 @@
 "use client";
 import { Cell, Pie, PieChart, Bar, BarChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { CHART_COLORS } from "@/lib/chart-colors";
 
 interface LogItem {
     account_name: string;
     balance: number;
     log_date: string;
 }
-
-const SHADCN_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 
 // Helper function to format internal ISO dates (YYYY-MM-DD) into European Display format (DD/MM/YYYY)
 const formatToEuroDate = (dateStr: string) => {
@@ -81,7 +80,7 @@ export default function DashboardCharts({ data }: { data: LogItem[] }) {
                                 label={({ name, percentage }) => `${name} (${percentage}%)`}
                             >
                                 {pieData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={SHADCN_COLORS[index % SHADCN_COLORS.length]} />
+                                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                                 ))}
                             </Pie>
                             <Tooltip formatter={(value) => formatToEuroCurrency(Number(value))} />
@@ -105,7 +104,7 @@ export default function DashboardCharts({ data }: { data: LogItem[] }) {
                             <Tooltip formatter={(value) => formatToEuroCurrency(Number(value))} />
                             <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                             {uniqueAccounts.map((account, index) => (
-                                <Bar key={account} dataKey={account} stackId="a" fill={SHADCN_COLORS[index % SHADCN_COLORS.length]} radius={[2, 2, 0, 0]} />
+                                <Bar key={account} dataKey={account} stackId="a" fill={CHART_COLORS[index % CHART_COLORS.length]} radius={[2, 2, 0, 0]} />
                             ))}
                         </BarChart>
                     </ResponsiveContainer>

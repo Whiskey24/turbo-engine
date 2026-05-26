@@ -18,8 +18,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { buildYearEndAllocationByType, type YearEndChartRow } from "@/lib/year-end-allocation";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
-
-const CHART_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#7c3aed", "#ec4899", "#06b6d4", "#ef4444"];
+import { CHART_COLORS } from "@/lib/chart-colors";
 
 const formatEuro = (value: number) =>
     new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(value);

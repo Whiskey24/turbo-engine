@@ -7,6 +7,7 @@ import { Wallet, Landmark, TrendingUp } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { PortfolioAssetWithTypeName } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
+import { CHART_COLORS } from "@/lib/chart-colors";
 
 interface AggregatedChartData {
     name: string;
@@ -27,9 +28,6 @@ interface AssetTableRow {
     assetType: string;
     balance: number;
 }
-
-// Tailored dashboard chart palette matrix
-const CHART_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#7c3aed", "#ec4899", "#06b6d4", "#ef4444"];
 
 const formatEuro = (num: number) => {
     return new Intl.NumberFormat("nl-NL", {
