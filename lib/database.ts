@@ -26,7 +26,7 @@ export type PortfolioAssetSummary = QueryData<typeof portfolioAssetSummaryQuery>
 
 const portfolioAssetWithTypeNameQuery = supabase
     .from("portfolio_assets")
-    .select("id, name, asset_types(name)");
+    .select("id, name, institution, iban, ticker, isin, asset_types(name)");
 
 export type PortfolioAssetWithTypeName = QueryData<typeof portfolioAssetWithTypeNameQuery>[number];
 

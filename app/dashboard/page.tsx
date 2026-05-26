@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import type { PortfolioAssetWithTypeName } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 import { CHART_COLORS } from "@/lib/chart-colors";
+import { formatIBAN } from "@/lib/utils";
 
 interface AggregatedChartData {
     name: string;
@@ -27,6 +28,10 @@ interface AssetTableRow {
     assetName: string;
     assetType: string;
     balance: number;
+    institution: string;
+    iban: string | null;
+    ticker: string | null;
+    isin: string | null;
 }
 
 const formatEuro = (num: number) => {
@@ -51,7 +56,7 @@ export default function DashboardAnalyticsPage() {
 
             const { data: assets, error: assetErr } = await supabase
                 .from("portfolio_assets")
-                .select("id, name, asset_types(name)");
+                .select("id, name, institution, iban, ticker, isin, asset_types(name)");
 
             if (assetErr || !assets) throw assetErr;
 
@@ -87,7 +92,11 @@ export default function DashboardAnalyticsPage() {
                         assetId: asset.id,
                         assetName: asset.name,
                         assetType: typeName,
-                        balance
+                        balance,
+                        institution: asset.institution,
+                        iban: asset.iban,
+                        ticker: asset.ticker,
+                        isin: asset.isin
                     });
                 }
             });
@@ -293,8 +302,33 @@ export default function DashboardAnalyticsPage() {
                                 <tbody>
                                     {assetTableRows.map((row, index) => (
                                         <tr key={row.assetId} className={`border-b hover:bg-muted/30 transition ${index % 2 === 0 ? 'bg-muted/20' : ''}`}>
-                                            <td className="py-2 px-4 text-foreground font-medium">
-                                                {row.assetName}
+                                            <td className="py-2 px-4 text-foreground font-medium group/cell relative">
+                                                <span className="cursor-pointer border-b border-dotted border-muted-foreground/40 hover:border-foreground/60 transition-colors">
+                                                    {row.assetName}
+                                                </span>
+                                                {/* Card details tooltip on hover */}
+                                                <div className="pointer-events-none absolute left-4 top-full mt-1 z-50 w-64 opacity-0 group-hover/cell:opacity-100 transition-opacity duration-150">
+                                                    <div className="bg-popover border border-border rounded-lg shadow-lg p-3 text-xs space-y-1.5">
+                                                        <p className="font-semibold text-foreground text-sm border-b pb-1 mb-1">{row.assetName}</p>
+                                                        <div className="space-y-1 text-muted-foreground">
+                                                            {row.institution && (
+                                                                <p><span className="font-medium text-foreground">Bank:</span> {row.institution}</p>
+                                                            )}
+                                                            {row.iban && (
+                                                                <p className="font-mono"><span className="font-medium text-foreground">IBAN:</span> {formatIBAN(row.iban)}</p>
+                                                            )}
+                                                            {row.ticker && (
+                                                                <p className="font-mono"><span className="font-medium text-foreground">Ticker:</span> {row.ticker}</p>
+                                                            )}
+                                                            {row.isin && (
+                                                                <p className="font-mono"><span className="font-medium text-foreground">ISIN:</span> {row.isin}</p>
+                                                            )}
+                                                            {!row.institution && !row.iban && !row.ticker && !row.isin && (
+                                                                <p className="italic text-muted-foreground">No additional card details</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </td>
                                             {assetTypes.map((typeName) => (
                                                 <td key={typeName} className="py-2 px-4 text-right font-mono text-foreground">

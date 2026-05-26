@@ -7,6 +7,7 @@ import { Trash2, Pencil, X } from "lucide-react"; // Imported for cleanup action
 import { supabase } from "@/lib/supabase";
 import type { AssetType, PortfolioAssetWithType } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
+import { formatIBAN } from "@/lib/utils";
 
 const formatToEuroDate = (dateStr: string) => {
     if (!dateStr) return "";
@@ -16,25 +17,6 @@ const formatToEuroDate = (dateStr: string) => {
 
 const formatToEuroCurrency = (value: number) => {
     return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(value);
-};
-
-const formatIBAN = (iban: string) => {
-    if (!iban) return "";
-    const clean = iban.replace(/\s+/g, "").toUpperCase();
-    const country = clean.substring(0, 2);
-
-    // Common bank code lengths in IBAN structure (positions starting at index 4)
-    const bankCodeLengths: Record<string, number> = {
-        NL: 4, DE: 8, BE: 3, FR: 5, ES: 4, GB: 4, AT: 5
-    };
-
-    const len = bankCodeLengths[country] || 4;
-    const first4 = clean.substring(0, 4);
-    const bankCode = clean.substring(4, 4 + len);
-    const rest = clean.substring(4 + len);
-    const restFormatted = rest.match(/.{1,4}/g)?.join(" ") || "";
-
-    return `${first4} ${bankCode} ${restFormatted}`.trim().replace(/\s+/g, " ");
 };
 
 interface LatestValuation {
