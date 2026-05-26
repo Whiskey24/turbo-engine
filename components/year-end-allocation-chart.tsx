@@ -7,6 +7,7 @@ import {
     Bar,
     BarChart,
     CartesianGrid,
+    LabelList,
     Legend,
     ResponsiveContainer,
     Tooltip,
@@ -25,7 +26,13 @@ const formatEuro = (value: number) =>
         style: "currency",
         currency: "EUR",
         minimumFractionDigits: 0,
-        maximumFractionDigits: 0
+        maximumFractionDigits: 0,
+    }).format(value);
+
+const formatCompact = (value: number) =>
+    new Intl.NumberFormat("nl-NL", {
+        notation: "compact",
+        compactDisplay: "short",
     }).format(value);
 
 type ChartVariant = "bar" | "area";
@@ -58,7 +65,15 @@ export default function YearEndAllocationChart() {
             }));
 
             const result = buildYearEndAllocationByType(assetsWithType, valuations ?? []);
-            setChartData(result.chartData);
+            // Add computed total for each row (used by LabelList)
+            const chartDataWithTotals = result.chartData.map((row) => {
+                const total = result.typeNames.reduce((sum, typeName) => {
+                    const val = row[typeName];
+                    return sum + (typeof val === "number" ? val : 0);
+                }, 0);
+                return { ...row, total };
+            });
+            setChartData(chartDataWithTotals);
             setTypeNames(result.typeNames);
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : "Unknown error";
@@ -126,12 +141,7 @@ export default function YearEndAllocationChart() {
                                     <CartesianGrid strokeDasharray="3 3" opacity={0.2} vertical={false} />
                                     <XAxis dataKey="label" tickLine={false} axisLine={false} className="text-xs" />
                                     <YAxis
-                                        tickFormatter={(value) =>
-                                            new Intl.NumberFormat("nl-NL", {
-                                                notation: "compact",
-                                                compactDisplay: "short",
-                                            }).format(Number(value))
-                                        }
+                                        tickFormatter={(value) => formatCompact(Number(value))}
                                         tickLine={false}
                                         axisLine={false}
                                         className="text-xs"
@@ -159,7 +169,29 @@ export default function YearEndAllocationChart() {
                                             stackId="yearEnd"
                                             fill={CHART_COLORS[index % CHART_COLORS.length]}
                                             radius={index === typeNames.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                                        />
+                                            isAnimationActive={false}
+                                        >
+                                            {index === typeNames.length - 1 && (
+                                                <LabelList
+                                                    dataKey="total"
+                                                    position="top"
+                                                    content={({ x, y, width, value }) => {
+                                                        if (!value) return null;
+                                                        return (
+                                                            <text
+                                                                x={(x as number) + (width as number) / 2}
+                                                                y={(y as number) - 6}
+                                                                textAnchor="middle"
+                                                                className="text-xs fill-muted-foreground"
+                                                                style={{ fontSize: 11 }}
+                                                            >
+                                                                {formatEuro(value as number)}
+                                                            </text>
+                                                        );
+                                                    }}
+                                                />
+                                            )}
+                                        </Bar>
                                     ))}
                                 </BarChart>
                             ) : (
