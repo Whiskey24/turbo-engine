@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Tables } from "@/lib/database.types";
 import { supabase } from "@/lib/supabase";
+import { parseUserAgent } from "@/lib/user-agent-utils";
 
 export default function LoginHistory() {
   const [logins, setLogins] = useState<Tables<"login_history">[]>([]);
@@ -13,7 +14,7 @@ export default function LoginHistory() {
     async function fetchLoginHistory() {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session?.user.id) {
         setError("User not authenticated");
         setLoading(false);
@@ -64,25 +65,26 @@ export default function LoginHistory() {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               IP Address
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Location
-            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {logins.map((login) => (
             <tr key={login.id}>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {new Date(login.login_at).toLocaleString()}
+                {new Date(login.login_at).toLocaleString('en-GB', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false
+                })}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {login.user_agent || "Unknown"}
+                {parseUserAgent(login.user_agent)}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {login.ip_address || "Unknown"}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {login.location || "Unknown"}
               </td>
             </tr>
           ))}
