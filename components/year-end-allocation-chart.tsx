@@ -21,7 +21,12 @@ import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 import { CHART_COLORS } from "@/lib/chart-colors";
 
 const formatEuro = (value: number) =>
-    new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(value);
+    new Intl.NumberFormat("nl-NL", {
+        style: "currency",
+        currency: "EUR",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(value);
 
 type ChartVariant = "bar" | "area";
 
@@ -132,12 +137,18 @@ export default function YearEndAllocationChart() {
                                         className="text-xs"
                                     />
                                     <Tooltip
-                                        formatter={(value: number) => formatEuro(value)}
-                                        contentStyle={{
-                                            background: "hsl(var(--card))",
-                                            borderRadius: "8px",
-                                            border: "1px solid hsl(var(--border))",
-                                            fontSize: "11px",
+                                        content={({ active, payload, label }) => {
+                                            if (!active || !payload || payload.length === 0) return null;
+                                            return (
+                                                <div className="bg-card border rounded-lg p-3 text-xs shadow-md space-y-1">
+                                                    <p className="font-semibold text-foreground">{label}</p>
+                                                    {payload.map((entry) => (
+                                                        <p key={entry.name} className="text-muted-foreground">
+                                                            {entry.name}: {formatEuro(entry.value as number)}
+                                                        </p>
+                                                    ))}
+                                                </div>
+                                            );
                                         }}
                                     />
                                     <Legend iconType="circle" wrapperStyle={{ fontSize: "11px" }} />
@@ -167,12 +178,18 @@ export default function YearEndAllocationChart() {
                                         className="text-xs"
                                     />
                                     <Tooltip
-                                        formatter={(value: number) => formatEuro(value)}
-                                        contentStyle={{
-                                            background: "hsl(var(--card))",
-                                            borderRadius: "8px",
-                                            border: "1px solid hsl(var(--border))",
-                                            fontSize: "11px",
+                                        content={({ active, payload, label }) => {
+                                            if (!active || !payload || payload.length === 0) return null;
+                                            return (
+                                                <div className="bg-card border rounded-lg p-3 text-xs shadow-md space-y-1">
+                                                    <p className="font-semibold text-foreground">{label}</p>
+                                                    {payload.map((entry) => (
+                                                        <p key={entry.name} className="text-muted-foreground">
+                                                            {entry.name}: {formatEuro(entry.value as number)}
+                                                        </p>
+                                                    ))}
+                                                </div>
+                                            );
                                         }}
                                     />
                                     <Legend iconType="circle" wrapperStyle={{ fontSize: "11px" }} />
