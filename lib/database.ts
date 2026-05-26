@@ -69,3 +69,30 @@ const exportValuationQuery = supabase.from("asset_valuations").select(`
 `);
 
 export type ExportValuationRow = QueryData<typeof exportValuationQuery>[number];
+
+export async function hasPortfolioData(): Promise<boolean> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) return false;
+
+    const { count: typeCount } = await supabase
+        .from("asset_types")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId);
+
+    if (typeCount && typeCount > 0) return true;
+
+    const { count: assetCount } = await supabase
+        .from("portfolio_assets")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId);
+
+    if (assetCount && assetCount > 0) return true;
+
+    const { count: valuationCount } = await supabase
+        .from("asset_valuations")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId);
+
+    return (valuationCount ?? 0) > 0;
+}

@@ -1,11 +1,24 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import DataTransferActions from "@/components/data-transfer-actions";
 import DeleteAllDataAction from "@/components/delete-all-data-action";
 import LoginHistory from "@/components/login-history";
 import ChangePassword from "@/components/change-password";
+import { hasPortfolioData } from "@/lib/database";
 
 export default function SettingsPage() {
+  const [hasData, setHasData] = useState<boolean | null>(null);
+
+  const checkHasData = () => {
+    hasPortfolioData().then(setHasData).catch(() => setHasData(false));
+  };
+
+  useEffect(() => {
+    checkHasData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
@@ -35,7 +48,7 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground mb-4">
             Export or import your portfolio data
           </p>
-          <DataTransferActions />
+          <DataTransferActions hasData={hasData} onDataChanged={checkHasData} />
         </div>
 
         {/* Delete My Data Section */}
@@ -44,7 +57,7 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground mb-4">
             Permanently remove all your portfolio data
           </p>
-          <DeleteAllDataAction />
+          <DeleteAllDataAction onDataChanged={checkHasData} />
         </div>
       </div>
 

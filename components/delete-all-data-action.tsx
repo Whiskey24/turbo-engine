@@ -9,7 +9,11 @@ import { refreshPortfolioViews } from "@/lib/portfolio-refresh";
 
 const CONFIRM_PHRASE = "DELETE IT ALL";
 
-export default function DeleteAllDataAction() {
+interface DeleteAllDataActionProps {
+    onDataChanged: () => void;
+}
+
+export default function DeleteAllDataAction({ onDataChanged }: DeleteAllDataActionProps) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const [confirmText, setConfirmText] = useState("");
@@ -38,6 +42,7 @@ export default function DeleteAllDataAction() {
         closeDialog();
         refreshPortfolioViews();
         router.refresh();
+        onDataChanged();
         alert("All portfolio data has been permanently deleted.");
     };
 

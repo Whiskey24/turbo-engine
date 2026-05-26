@@ -32,7 +32,12 @@ const importOptions: { kind: ImportKind; label: string; description: string }[] 
     },
 ];
 
-export default function DataTransferActions() {
+interface DataTransferActionsProps {
+    hasData: boolean | null;
+    onDataChanged: () => void;
+}
+
+export default function DataTransferActions({ hasData, onDataChanged }: DataTransferActionsProps) {
     const router = useRouter();
     const [importOpen, setImportOpen] = useState(false);
     const [busy, setBusy] = useState<"export" | ImportKind | null>(null);
@@ -70,8 +75,8 @@ export default function DataTransferActions() {
             kind === "asset_types"
                 ? await importAssetTypesFromTsv(content)
                 : kind === "assets"
-                  ? await importAssetsFromTsv(content)
-                  : await importTransactionsFromTsv(content);
+                    ? await importAssetsFromTsv(content)
+                    : await importTransactionsFromTsv(content);
 
         setBusy(null);
 
@@ -85,6 +90,9 @@ export default function DataTransferActions() {
 
         refreshPortfolioViews();
         router.refresh();
+
+        // Re-check whether we now have data so the export button enables
+        onDataChanged();
 
         if (result.skipped > 0) {
             alert(
@@ -109,7 +117,7 @@ export default function DataTransferActions() {
             <button
                 type="button"
                 onClick={handleExport}
-                disabled={busy !== null}
+                disabled={busy !== null || hasData === false}
                 className={cn(
                     "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
                     "text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
