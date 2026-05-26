@@ -3,6 +3,7 @@
 import DataTransferActions from "@/components/data-transfer-actions";
 import DeleteAllDataAction from "@/components/delete-all-data-action";
 import LoginHistory from "@/components/login-history";
+import ChangePassword from "@/components/change-password";
 
 export default function SettingsPage() {
   return (
@@ -25,9 +26,7 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground mb-4">
             Update your account password
           </p>
-          <div className="bg-gray-100 rounded-lg p-4 text-center text-gray-500">
-            Password change functionality coming soon
-          </div>
+          <ChangePassword />
         </div>
 
         {/* Backup & Restore Section */}
