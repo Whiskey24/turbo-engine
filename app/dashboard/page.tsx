@@ -195,7 +195,7 @@ export default function DashboardAnalyticsPage() {
                         <CardTitle className="text-base">Asset Type Allocation</CardTitle>
                         <CardDescription>Visual breakdown of portfolio exposure weights.</CardDescription>
                     </CardHeader>
-                    <CardContent className="pt-4 flex justify-center items-center">
+                    <CardContent className="flex justify-center items-center p-3">
                         {chartData.length === 0 ? (
                             <div className="h-64 flex flex-col justify-center items-center border border-dashed rounded-xl w-full text-muted-foreground text-xs italic">
                                 Add valuation checkpoints inside the transactional ledger to generate data visualization layers.
@@ -210,40 +210,28 @@ export default function DashboardAnalyticsPage() {
                                             nameKey="name"
                                             cx="50%"
                                             cy="50%"
-                                            outerRadius={100}
+                                            outerRadius={130}
                                             paddingAngle={2}
-                                            label={({ cx, cy, midAngle, outerRadius, name, value }) => {
-                                                const RADIAN = Math.PI / 180;
-                                                const radius = outerRadius + 30;
-                                                const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                                                const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                                                const percentage = ((value / totalPortfolioValue) * 100).toFixed(1);
-
-                                                return (
-                                                    <text
-                                                        x={x}
-                                                        y={y}
-                                                        fill="hsl(var(--foreground))"
-                                                        textAnchor={x > cx ? 'start' : 'end'}
-                                                        dominantBaseline="central"
-                                                        className="text-xs font-medium"
-                                                    >
-                                                        {`${name}: ${percentage}%`}
-                                                    </text>
-                                                );
-                                            }}
-                                            labelLine={{
-                                                stroke: "hsl(var(--border))",
-                                                strokeWidth: 1
-                                            }}
                                         >
                                             {chartData.map((entry, index) => (
                                                 <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                                             ))}
                                         </Pie>
                                         <Tooltip
-                                            formatter={(value: number) => [formatEuro(value), "Total Value"]}
-                                            contentStyle={{ background: "hsl(var(--card))", borderRadius: "8px", border: "1px solid hsl(var(--border))", fontSize: "11px" }}
+                                            content={({ active, payload }) => {
+                                                if (!active || !payload || payload.length === 0) return null;
+                                                const d = payload[0];
+                                                const value = d.value as number;
+                                                const percentage = ((value / totalPortfolioValue) * 100).toFixed(1);
+                                                return (
+                                                    <div className="bg-card border rounded-lg p-3 text-xs shadow-md space-y-1">
+                                                        <p className="font-semibold text-foreground">{d.name}</p>
+                                                        <p className="text-muted-foreground">
+                                                            {percentage}% &middot; {formatEuro(value)}
+                                                        </p>
+                                                    </div>
+                                                );
+                                            }}
                                         />
                                     </PieChart>
                                 </ResponsiveContainer>
@@ -289,9 +277,9 @@ export default function DashboardAnalyticsPage() {
                         <CardDescription>Latest valuation breakdown with assets as rows and types as columns.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto overflow-y-auto max-h-[600px]">
                             <table className="w-full text-sm">
-                                <thead>
+                                <thead className="sticky top-0 bg-card z-10">
                                     <tr className="border-b">
                                         <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Asset Name</th>
                                         {assetTypes.map((typeName, idx) => (
