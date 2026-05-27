@@ -4,15 +4,23 @@ const { execSync } = require('child_process');
 let buildNumber = 'v0.0.0-unknown';
 let buildTime = new Date().toISOString();
 
-try {
-  // 1. Get the latest Git tag/commit version hash synchronously
-  buildNumber = execSync('git describe --tags --always').toString().trim();
-} catch (e) {
-  console.log('⚠️ Git not initialized or no tags found, falling back to commit hash');
+// Check if we are running inside Vercel's build pipeline
+if (process.env.VERCEL) {
+  // Use the production Git commit SHA injected by Vercel
+  const shortSha = process.env.VERCEL_GIT_COMMIT_SHA?.substring(0, 7);
+  buildNumber = shortSha ? `v-${shortSha}` : 'v0.0.0-vercel';
+} else {
+  // Local development fallback using your original local Git logic
   try {
-    buildNumber = execSync('git rev-parse --short HEAD').toString().trim();
-  } catch (err) {
-    buildNumber = 'v0.9.0-fallback';
+    const { execSync } = require('child_process');
+    buildNumber = execSync('git describe --tags --always').toString().trim();
+  } catch (e) {
+    try {
+      const { execSync } = require('child_process');
+      buildNumber = execSync('git rev-parse --short HEAD').toString().trim();
+    } catch (err) {
+      buildNumber = 'v0.9.0-fallback';
+    }
   }
 }
 
