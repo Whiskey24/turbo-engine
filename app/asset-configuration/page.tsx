@@ -102,6 +102,12 @@ export default function AssetConfigurationPage() {
     const [loadingType, setLoadingType] = useState(false);
     const [loadingAsset, setLoadingAsset] = useState(false);
 
+    // Edit Asset Type Dialog State
+    const [editingType, setEditingType] = useState<AssetType | null>(null);
+    const [editTypeName, setEditTypeName] = useState("");
+    const [editTypeSlug, setEditTypeSlug] = useState<string>("");
+    const [loadingEditType, setLoadingEditType] = useState(false);
+
     // Edit Asset Dialog State
     const [editingAsset, setEditingAsset] = useState<PortfolioAssetWithType | null>(null);
     const [editTypeId, setEditTypeId] = useState("");
@@ -185,6 +191,43 @@ export default function AssetConfigurationPage() {
         }
     };
 
+    const openEditTypeDialog = (type: AssetType) => {
+        setEditingType(type);
+        setEditTypeName(type.name);
+        setEditTypeSlug(type.type_slug || "");
+    };
+
+    const closeEditTypeDialog = () => {
+        if (loadingEditType) return;
+        setEditingType(null);
+    };
+
+    const handleUpdateType = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingType) return;
+        if (!editTypeSlug) {
+            alert("Please select an asset type slug.");
+            return;
+        }
+        setLoadingEditType(true);
+
+        const { error } = await supabase
+            .from("asset_types")
+            .update({
+                name: editTypeName,
+                type_slug: editTypeSlug,
+            })
+            .eq("id", editingType.id);
+
+        setLoadingEditType(false);
+        if (!error) {
+            setEditingType(null);
+            fetchData();
+        } else {
+            alert(`Error updating type classification: ${error.message}`);
+        }
+    };
+
     const handleCreateAsset = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoadingAsset(true);
@@ -199,11 +242,11 @@ export default function AssetConfigurationPage() {
                 comments: comments || null,
                 iban: reqs.requires_iban ? iban : null,
                 ticker: reqs.requires_ticker ? ticker.toUpperCase() : null,
-                isin: reqs.requires_isin ? isin.toUpperCase() : null,
+                isin: reqs.requires_isin ? editIsin.toUpperCase() : null,
             },
         ]);
 
-        setLoadingAsset(false);
+        setLoadingAsset(false)
         if (!error) {
             setAssetName("");
             setInstitution("");
@@ -432,7 +475,7 @@ export default function AssetConfigurationPage() {
                                 )}
 
                                 <button type="submit" disabled={loadingType} className="w-full bg-secondary text-secondary-foreground font-medium py-2 rounded-md transition hover:opacity-90 text-sm mt-2 cursor-pointer disabled:cursor-not-allowed">
-                                    {loadingType ? "Processing..." : "Register Type Template"}
+                                    {loadingType ? "Processing..." : "Create Asset Type"}
                                 </button>
                             </form>
                         </CardContent>
@@ -450,9 +493,9 @@ export default function AssetConfigurationPage() {
                             {types.map(t => {
                                 const tReqs = requiresForType(t);
                                 return (
-                                    <div key={t.id} className="bg-card border rounded-md p-3 flex justify-between items-center group shadow-sm h-[71px]">
-                                        <div className="flex flex-col gap-0.5">
-                                            <span className="font-semibold text-foreground text-xs">{t.name}</span>
+                                    <div key={t.id} className="bg-card border rounded-md p-3 relative group shadow-sm h-[71px]">
+                                        <div className="flex flex-col gap-0.5 pr-8">
+                                            <span className="font-semibold text-foreground text-xs truncate" title={t.name}>{t.name}</span>
                                             <span className="text-[10px] font-medium text-muted-foreground">
                                                 {t.type_slug && t.type_slug in ASSET_TYPE_LABELS
                                                     ? ASSET_TYPE_LABELS[t.type_slug as keyof typeof ASSET_TYPE_LABELS]
@@ -464,13 +507,22 @@ export default function AssetConfigurationPage() {
                                                 {tReqs.requires_isin && <span>[ISIN]</span>}
                                             </div>
                                         </div>
-                                        <button
-                                            onClick={() => handleDeleteType(t.id, t.name)}
-                                            className="text-muted-foreground hover:text-destructive p-1 rounded transition opacity-60 hover:opacity-100 cursor-pointer"
-                                            title="Remove Type classification"
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
+                                        <div className="absolute top-2 right-2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition">
+                                            <button
+                                                onClick={() => openEditTypeDialog(t)}
+                                                className="text-muted-foreground hover:text-primary p-1 rounded transition cursor-pointer"
+                                                title="Edit template configuration"
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteType(t.id, t.name)}
+                                                className="text-muted-foreground hover:text-destructive p-1 rounded transition cursor-pointer"
+                                                title="Remove Type classification"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -482,7 +534,7 @@ export default function AssetConfigurationPage() {
             {/* BLOCK 2: REGISTER ASSET ACCOUNTS (FULL PAGE WIDTH) */}
             <Card className="shadow-sm w-full">
                 <CardHeader>
-                    <CardTitle className="text-base">Define Assets</CardTitle>
+                    <CardTitle className="text-base">Create Assets</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {types.length === 0 ? (
@@ -544,7 +596,7 @@ export default function AssetConfigurationPage() {
 
                             <div className="md:col-span-2 pt-2">
                                 <button type="submit" disabled={loadingAsset} className="w-full bg-secondary text-secondary-foreground font-medium py-2 rounded-md transition hover:opacity-90 text-sm cursor-pointer disabled:cursor-not-allowed">
-                                    {loadingAsset ? "Registering Asset Account..." : "Save Asset"}
+                                    {loadingAsset ? "Registering Asset Account..." : "Create Asset"}
                                 </button>
                             </div>
                         </form>
@@ -563,8 +615,8 @@ export default function AssetConfigurationPage() {
                             <button
                                 onClick={() => setViewMode("cards")}
                                 className={`p-1.5 rounded-md transition text-xs flex items-center gap-1.5 cursor-pointer ${viewMode === "cards"
-                                        ? "bg-card text-foreground shadow-sm font-medium"
-                                        : "text-muted-foreground hover:text-foreground"
+                                    ? "bg-card text-foreground shadow-sm font-medium"
+                                    : "text-muted-foreground hover:text-foreground"
                                     }`}
                                 title="Show Cards Layout"
                             >
@@ -574,8 +626,8 @@ export default function AssetConfigurationPage() {
                             <button
                                 onClick={() => setViewMode("table")}
                                 className={`p-1.5 rounded-md transition text-xs flex items-center gap-1.5 cursor-pointer ${viewMode === "table"
-                                        ? "bg-card text-foreground shadow-sm font-medium"
-                                        : "text-muted-foreground hover:text-foreground"
+                                    ? "bg-card text-foreground shadow-sm font-medium"
+                                    : "text-muted-foreground hover:text-foreground"
                                     }`}
                                 title="Show Spreadsheet Table"
                             >
@@ -650,7 +702,7 @@ export default function AssetConfigurationPage() {
                                         className="p-3 cursor-pointer hover:bg-muted/80 hover:text-foreground group transition w-1/4"
                                     >
                                         <div className="flex items-center">
-                                            <span>Asset Account</span>
+                                            <span>Asset</span>
                                             {renderSortIcon("name")}
                                         </div>
                                     </th>
@@ -659,7 +711,7 @@ export default function AssetConfigurationPage() {
                                         className="p-3 cursor-pointer hover:bg-muted/80 hover:text-foreground group transition w-1/6"
                                     >
                                         <div className="flex items-center">
-                                            <span>Institution</span>
+                                            <span>Custodian Bank / Broker</span>
                                             {renderSortIcon("institution")}
                                         </div>
                                     </th>
@@ -668,7 +720,7 @@ export default function AssetConfigurationPage() {
                                         className="p-3 cursor-pointer hover:bg-muted/80 hover:text-foreground group transition w-1/5"
                                     >
                                         <div className="flex items-center">
-                                            <span>Category Classification</span>
+                                            <span>Asset Type</span>
                                             {renderSortIcon("type")}
                                         </div>
                                     </th>
@@ -748,6 +800,121 @@ export default function AssetConfigurationPage() {
                     </div>
                 )}
             </div>
+
+            {/* EDIT ASSET TYPE DIALOG OVERLAY */}
+            {editingType && (
+                <div
+                    className="fixed inset-0 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+                    style={{ zIndex: 9999 }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="edit-type-title"
+                >
+                    <div className="relative w-full max-w-md rounded-xl border bg-card p-5 shadow-lg" style={{ zIndex: 10000 }}>
+                        <div className="mb-4 flex items-start justify-between gap-3">
+                            <div>
+                                <h3 id="edit-type-title" className="text-base font-semibold text-foreground">
+                                    Edit Asset Type
+                                </h3>
+
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeEditTypeDialog}
+                                disabled={loadingEditType}
+                                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 cursor-pointer"
+                                aria-label="Close"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleUpdateType} className="space-y-4">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Asset type label</label>
+                                <input
+                                    type="text" value={editTypeName} onChange={(e) => setEditTypeName(e.target.value)}
+                                    className="border rounded-md p-2 bg-background text-sm" required
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Remember to update all the assets of this asset type when changing this classification!
+                                </p>
+                                <label className="text-xs font-medium text-muted-foreground">Asset classification</label>
+
+                                <select
+                                    value={editTypeSlug}
+                                    onChange={(e) => setEditTypeSlug(e.target.value)}
+                                    className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
+                                    required
+                                >
+                                    <option value="" disabled>-- Select a classification --</option>
+                                    {VALID_TYPE_SLUGS.map((slug) => (
+                                        <option key={slug} value={slug}>
+                                            {ASSET_TYPE_LABELS[slug]}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {editTypeSlug && (
+                                <div className="space-y-2 border rounded-md p-3 bg-muted/40">
+                                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Required Data Parameters:</p>
+                                    {(() => {
+                                        const reqs = getSlugRequirements(editTypeSlug);
+                                        const hasAny = reqs.requires_iban || reqs.requires_ticker || reqs.requires_isin;
+                                        if (!hasAny) {
+                                            return <p className="text-xs text-muted-foreground italic">None — no additional parameters required.</p>;
+                                        }
+                                        return (
+                                            <div className="grid grid-cols-1 gap-2">
+                                                {reqs.requires_iban && (
+                                                    <div className="flex items-center gap-2.5 text-sm font-normal">
+                                                        <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
+                                                        <span>Requires IBAN</span>
+                                                    </div>
+                                                )}
+                                                {reqs.requires_ticker && (
+                                                    <div className="flex items-center gap-2.5 text-sm font-normal">
+                                                        <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
+                                                        <span>Requires Ticker</span>
+                                                    </div>
+                                                )}
+                                                {reqs.requires_isin && (
+                                                    <div className="flex items-center gap-2.5 text-sm font-normal">
+                                                        <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
+                                                        <span>Requires ISIN</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+
+                            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-2">
+                                <button
+                                    type="button"
+                                    onClick={closeEditTypeDialog}
+                                    disabled={loadingEditType}
+                                    className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50 cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={loadingEditType}
+                                    className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50 cursor-pointer"
+                                >
+                                    {loadingEditType ? "Saving..." : "Save changes"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* EDIT ASSET DIALOG OVERLAY */}
             {editingAsset && (
