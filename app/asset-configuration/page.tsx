@@ -2,7 +2,7 @@
 export const dynamic = "force-dynamic";
 import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Trash2, Pencil, X } from "lucide-react";
+import { Trash2, Pencil, X, LayoutGrid, Table, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
 import type { AssetType, PortfolioAssetWithType } from "@/lib/database";
@@ -71,10 +71,20 @@ interface LatestValuation {
     valuation_date: string;
 }
 
+type SortField = "name" | "institution" | "type" | "valuation";
+interface SortConfig {
+    field: SortField;
+    direction: "asc" | "desc";
+}
+
 export default function AssetConfigurationPage() {
     const [types, setTypes] = useState<AssetType[]>([]);
     const [assets, setAssets] = useState<PortfolioAssetWithType[]>([]);
     const [latestValuations, setLatestValuations] = useState<Record<string, LatestValuation>>({});
+
+    // Layout and Sorting States
+    const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+    const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
     // Form States
     const [newTypeName, setNewTypeName] = useState("");
@@ -287,6 +297,56 @@ export default function AssetConfigurationPage() {
         }
     };
 
+    // Table Column Sorting Handler
+    const handleSort = (field: SortField) => {
+        setSortConfig((current) => {
+            if (!current || current.field !== field) {
+                return { field, direction: "asc" };
+            }
+            if (current.direction === "asc") {
+                return { field, direction: "desc" };
+            }
+            return null; // Reset sort state on 3rd click cycle
+        });
+    };
+
+    const renderSortIcon = (field: SortField) => {
+        if (!sortConfig || sortConfig.field !== field) {
+            return <ChevronsUpDown className="ml-1 h-3 w-3 inline text-muted-foreground/50 group-hover:text-muted-foreground transition" />;
+        }
+        return sortConfig.direction === "asc" ? (
+            <ArrowUp className="ml-1 h-3 w-3 inline text-primary" />
+        ) : (
+            <ArrowDown className="ml-1 h-3 w-3 inline text-primary" />
+        );
+    };
+
+    // Compute active runtime client sorted assets collection
+    const sortedAssets = [...assets].sort((a, b) => {
+        if (!sortConfig) return 0;
+        const { field, direction } = sortConfig;
+        let valA: string | number = "";
+        let valB: string | number = "";
+
+        if (field === "name") {
+            valA = (a.name || "").toLowerCase();
+            valB = (b.name || "").toLowerCase();
+        } else if (field === "institution") {
+            valA = (a.institution || "").toLowerCase();
+            valB = (b.institution || "").toLowerCase();
+        } else if (field === "type") {
+            valA = (a.asset_types?.name || "").toLowerCase();
+            valB = (b.asset_types?.name || "").toLowerCase();
+        } else if (field === "valuation") {
+            valA = latestValuations[a.id]?.balance_amount ?? -1;
+            valB = latestValuations[b.id]?.balance_amount ?? -1;
+        }
+
+        if (valA < valB) return direction === "asc" ? -1 : 1;
+        if (valA > valB) return direction === "asc" ? 1 : -1;
+        return 0;
+    });
+
     const createReqs = requiresForType(currentActiveRuleSet);
     const editReqs = requiresForType(editRuleSet);
 
@@ -301,7 +361,6 @@ export default function AssetConfigurationPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
                 {/* COLUMN 1: MAINTAIN ASSET TYPES */}
-                {/* 🌟 min-h-[396px] matches the overall structural footprint of the 8-card grid sidecar */}
                 <Card className="shadow-sm lg:col-span-1 min-h-[419px] max-h-[419px] flex flex-col justify-between">
                     <div>
                         <CardHeader>
@@ -373,7 +432,7 @@ export default function AssetConfigurationPage() {
                                 )}
 
                                 <button type="submit" disabled={loadingType} className="w-full bg-secondary text-secondary-foreground font-medium py-2 rounded-md transition hover:opacity-90 text-sm mt-2 cursor-pointer disabled:cursor-not-allowed">
-                                    {loadingType ? "Processing..." : "Create Asset Type"}
+                                    {loadingType ? "Processing..." : "Register Type Template"}
                                 </button>
                             </form>
                         </CardContent>
@@ -382,13 +441,11 @@ export default function AssetConfigurationPage() {
 
                 {/* COLUMNS 2 & 3: DEFINED ASSET TYPES */}
                 <div className="space-y-2 h-full lg:col-span-2">
-
                     {types.length === 0 ? (
                         <div className="bg-card border border-dashed rounded-md p-6 text-muted-foreground text-center text-sm min-h-[419px] flex items-center justify-center">
                             No asset types registered.
                         </div>
                     ) : (
-                        /* min-h-[340px] and max-h-[340px] guarantees explicit room to display 10 items layout (5 rows across 2 parallel columns) before invoking internal scrolling track constraints */
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[419px] max-h-[419px] overflow-y-auto pr-1 content-start">
                             {types.map(t => {
                                 const tReqs = requiresForType(t);
@@ -409,7 +466,7 @@ export default function AssetConfigurationPage() {
                                         </div>
                                         <button
                                             onClick={() => handleDeleteType(t.id, t.name)}
-                                            className="text-muted-foreground hover:text-destructive p-1 rounded transition opacity-60 hover:opacity-100"
+                                            className="text-muted-foreground hover:text-destructive p-1 rounded transition opacity-60 hover:opacity-100 cursor-pointer"
                                             title="Remove Type classification"
                                         >
                                             <Trash2 className="h-3.5 w-3.5" />
@@ -425,7 +482,7 @@ export default function AssetConfigurationPage() {
             {/* BLOCK 2: REGISTER ASSET ACCOUNTS (FULL PAGE WIDTH) */}
             <Card className="shadow-sm w-full">
                 <CardHeader>
-                    <CardTitle className="text-base">Create Assets</CardTitle>
+                    <CardTitle className="text-base">Define Assets</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {types.length === 0 ? (
@@ -434,8 +491,6 @@ export default function AssetConfigurationPage() {
                         </div>
                     ) : (
                         <form onSubmit={handleCreateAsset} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-xs font-medium text-muted-foreground">Account Name</label>
                                 <input type="text" value={assetName} onChange={(e) => setAssetName(e.target.value)} placeholder="e.g., Personal Portfolio Reserve" className="border rounded-md p-2 bg-background text-sm" required />
@@ -450,7 +505,6 @@ export default function AssetConfigurationPage() {
                                     {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                 </select>
                             </div>
-
 
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-xs font-medium text-muted-foreground">Custodian Bank / Broker</label>
@@ -490,7 +544,7 @@ export default function AssetConfigurationPage() {
 
                             <div className="md:col-span-2 pt-2">
                                 <button type="submit" disabled={loadingAsset} className="w-full bg-secondary text-secondary-foreground font-medium py-2 rounded-md transition hover:opacity-90 text-sm cursor-pointer disabled:cursor-not-allowed">
-                                    {loadingAsset ? "Creeating Asset..." : "Create Asset"}
+                                    {loadingAsset ? "Registering Asset Account..." : "Save Asset"}
                                 </button>
                             </div>
                         </form>
@@ -498,14 +552,46 @@ export default function AssetConfigurationPage() {
                 </CardContent>
             </Card>
 
-            {/* BLOCK 3: REGISTERED ACTIVE ASSETS GRID */}
+            {/* BLOCK 3: REGISTERED ACTIVE ASSETS GRID / TABLE VIEW */}
             <div className="space-y-3 w-full">
-                <h3 className="text-base font-semibold px-1">Registered Assets</h3>
+                <div className="flex justify-between items-center px-1">
+                    <h3 className="text-base font-semibold">Registered Assets</h3>
+
+                    {/* View Switcher Controls */}
+                    {assets.length > 0 && (
+                        <div className="flex items-center gap-1 bg-muted p-1 rounded-lg border">
+                            <button
+                                onClick={() => setViewMode("cards")}
+                                className={`p-1.5 rounded-md transition text-xs flex items-center gap-1.5 cursor-pointer ${viewMode === "cards"
+                                        ? "bg-card text-foreground shadow-sm font-medium"
+                                        : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                title="Show Cards Layout"
+                            >
+                                <LayoutGrid className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">Cards</span>
+                            </button>
+                            <button
+                                onClick={() => setViewMode("table")}
+                                className={`p-1.5 rounded-md transition text-xs flex items-center gap-1.5 cursor-pointer ${viewMode === "table"
+                                        ? "bg-card text-foreground shadow-sm font-medium"
+                                        : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                title="Show Spreadsheet Table"
+                            >
+                                <Table className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">Table</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
+
                 {assets.length === 0 ? (
                     <div className="border border-dashed rounded-xl h-32 flex items-center justify-center text-muted-foreground text-sm bg-card">
                         No assets registered.
                     </div>
-                ) : (
+                ) : viewMode === "cards" ? (
+                    /* ORIGINAL CARDS VIEW MODE */
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {assets.map((asset) => (
                             <Card key={asset.id} className="shadow-sm relative group">
@@ -522,14 +608,14 @@ export default function AssetConfigurationPage() {
                                     <div className="absolute top-4 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition">
                                         <button
                                             onClick={() => openEditDialog(asset)}
-                                            className="text-muted-foreground hover:text-primary p-1 rounded transition"
+                                            className="text-muted-foreground hover:text-primary p-1 rounded transition cursor-pointer"
                                             title="Edit asset profile"
                                         >
                                             <Pencil className="h-4 w-4" />
                                         </button>
                                         <button
                                             onClick={() => handleDeleteAsset(asset.id, asset.name)}
-                                            className="text-muted-foreground hover:text-destructive p-1 rounded transition"
+                                            className="text-muted-foreground hover:text-destructive p-1 rounded transition cursor-pointer"
                                             title="Remove account entry profile"
                                         >
                                             <Trash2 className="h-4 w-4" />
@@ -552,6 +638,113 @@ export default function AssetConfigurationPage() {
                                 </CardContent>
                             </Card>
                         ))}
+                    </div>
+                ) : (
+                    /* SPREADSHEET TABLE VIEW MODE (WITH INTERACTIVE SORTING HEADERS) */
+                    <div className="border rounded-md bg-card shadow-sm overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr className="bg-muted/60 border-b text-muted-foreground font-medium select-none">
+                                    <th
+                                        onClick={() => handleSort("name")}
+                                        className="p-3 cursor-pointer hover:bg-muted/80 hover:text-foreground group transition w-1/4"
+                                    >
+                                        <div className="flex items-center">
+                                            <span>Asset Account</span>
+                                            {renderSortIcon("name")}
+                                        </div>
+                                    </th>
+                                    <th
+                                        onClick={() => handleSort("institution")}
+                                        className="p-3 cursor-pointer hover:bg-muted/80 hover:text-foreground group transition w-1/6"
+                                    >
+                                        <div className="flex items-center">
+                                            <span>Institution</span>
+                                            {renderSortIcon("institution")}
+                                        </div>
+                                    </th>
+                                    <th
+                                        onClick={() => handleSort("type")}
+                                        className="p-3 cursor-pointer hover:bg-muted/80 hover:text-foreground group transition w-1/5"
+                                    >
+                                        <div className="flex items-center">
+                                            <span>Category Classification</span>
+                                            {renderSortIcon("type")}
+                                        </div>
+                                    </th>
+                                    <th className="p-3 text-muted-foreground font-medium w-1/5">Identifying Keys</th>
+                                    <th
+                                        onClick={() => handleSort("valuation")}
+                                        className="p-3 cursor-pointer hover:bg-muted/80 hover:text-foreground group transition text-right w-1/6"
+                                    >
+                                        <div className="flex items-center justify-end">
+                                            <span>Latest Valuation</span>
+                                            {renderSortIcon("valuation")}
+                                        </div>
+                                    </th>
+                                    <th className="p-3 text-center w-24">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {sortedAssets.map((asset) => {
+                                    const valuation = latestValuations[asset.id];
+                                    return (
+                                        <tr key={asset.id} className="hover:bg-muted/30 transition-colors">
+                                            <td className="p-3 font-semibold text-foreground">
+                                                <div className="flex flex-col">
+                                                    <span>{asset.name}</span>
+                                                    {asset.comments && (
+                                                        <span className="text-[10px] text-muted-foreground/80 font-normal max-w-xs truncate" title={asset.comments}>
+                                                            {asset.comments}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="p-3 text-muted-foreground">{asset.institution}</td>
+                                            <td className="p-3">
+                                                <span className="text-[10px] font-medium bg-secondary text-secondary-foreground px-2 py-0.5 rounded">
+                                                    {asset.asset_types?.name || "Asset"}
+                                                </span>
+                                            </td>
+                                            <td className="p-3 font-mono text-[11px] text-muted-foreground space-y-0.5">
+                                                {asset.iban && <div><span className="text-[9px] font-sans font-medium text-foreground/70 mr-1">[IBAN]</span>{formatIBAN(asset.iban)}</div>}
+                                                {asset.ticker && <div><span className="text-[9px] font-sans font-medium text-foreground/70 mr-1">[TICK]</span>{asset.ticker}</div>}
+                                                {asset.isin && <div><span className="text-[9px] font-sans font-medium text-foreground/70 mr-1">[ISIN]</span>{asset.isin}</div>}
+                                                {!asset.iban && !asset.ticker && !asset.isin && <span className="italic text-muted-foreground/60 font-sans text-xs">—</span>}
+                                            </td>
+                                            <td className="p-3 text-right">
+                                                {valuation ? (
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-primary">{formatToEuroCurrency(valuation.balance_amount)}</span>
+                                                        <span className="text-[10px] text-muted-foreground">{formatToEuroDate(valuation.valuation_date)}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="italic text-muted-foreground/60">No records</span>
+                                                )}
+                                            </td>
+                                            <td className="p-3">
+                                                <div className="flex justify-center items-center gap-1">
+                                                    <button
+                                                        onClick={() => openEditDialog(asset)}
+                                                        className="text-muted-foreground hover:text-primary p-1 rounded transition cursor-pointer"
+                                                        title="Edit asset profile"
+                                                    >
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteAsset(asset.id, asset.name)}
+                                                        className="text-muted-foreground hover:text-destructive p-1 rounded transition cursor-pointer"
+                                                        title="Remove account entry profile"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </div>
@@ -579,7 +772,7 @@ export default function AssetConfigurationPage() {
                                 type="button"
                                 onClick={closeEditDialog}
                                 disabled={loadingEdit}
-                                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 cursor-pointer"
                                 aria-label="Close"
                             >
                                 <X className="h-4 w-4" />
@@ -643,14 +836,14 @@ export default function AssetConfigurationPage() {
                                     type="button"
                                     onClick={closeEditDialog}
                                     disabled={loadingEdit}
-                                    className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
+                                    className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50 cursor-pointer"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={loadingEdit}
-                                    className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                                    className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50 cursor-pointer"
                                 >
                                     {loadingEdit ? "Saving..." : "Save changes"}
                                 </button>
