@@ -8,21 +8,21 @@ import {
     Database,
     History,
     TrendingUp,
-    PieChart,
     BarChart3,
     LogOut,
-    User
+    User,
+    BookOpen
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
 
 const navigationItems = [
-    { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Master Data Config", href: "/master-data", icon: Database },
-    { name: "Transactional Logs", href: "/transactions", icon: History },
-    { name: "Live Market Prices", href: "/market-prices", icon: TrendingUp },
-    { name: "Current Allocations", href: "/charts-allocation", icon: PieChart },
+    { name: "Asset Overview", href: "/asset-overview", icon: LayoutDashboard },
+    { name: "Trading Overview", href: "/trading-overview", icon: TrendingUp },
+    { name: "Valuation Ledger", href: "/valuation-ledger", icon: History },
+    { name: "Trading Journal", href: "/trading-journal", icon: BookOpen },
     { name: "Historical Timelines", href: "/charts-history", icon: BarChart3 },
+    { name: "Asset configuration", href: "/asset-configuration", icon: Database },
     { name: "Settings", href: "/settings", icon: User },
 ];
 

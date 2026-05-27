@@ -8,8 +8,8 @@ export default function NotFound() {
       <p className="mt-2 text-sm text-muted-foreground">
         Could not find the requested resource.
       </p>
-      <Link href="/dashboard" className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-        Return to Dashboard
+      <Link href="/asset-overview" className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+        Return to Asset Overview
       </Link>
     </div>
   );

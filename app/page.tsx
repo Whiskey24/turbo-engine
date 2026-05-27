@@ -42,5 +42,5 @@ export default function Home() {
   }
 
   // 2. If user IS authenticated, instantly bounce them straight into the new dashboard layout!
-  redirect("/dashboard");
+  redirect("/asset-overview");
 }

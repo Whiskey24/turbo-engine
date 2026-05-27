@@ -62,7 +62,7 @@ interface LatestValuation {
     valuation_date: string;
 }
 
-export default function MasterDataPage() {
+export default function AssetConfigurationPage() {
     const [types, setTypes] = useState<AssetType[]>([]);
     const [assets, setAssets] = useState<PortfolioAssetWithType[]>([]);
     const [latestValuations, setLatestValuations] = useState<Record<string, LatestValuation>>({});
@@ -286,8 +286,8 @@ export default function MasterDataPage() {
     return (
         <div className="space-y-8">
             <div>
-                <h1 className="text-2xl font-bold tracking-tight">Master Data Workspace</h1>
-                <p className="text-sm text-muted-foreground">Maintain custom structural classification blueprints and assign accounts parameters dynamically.</p>
+                <h1 className="text-2xl font-bold tracking-tight">Asset Configuration</h1>
+                <p className="text-sm text-muted-foreground">Maintain asset types and assets.</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">

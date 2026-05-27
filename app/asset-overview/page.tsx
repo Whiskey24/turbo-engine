@@ -146,9 +146,9 @@ export default function DashboardAnalyticsPage() {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-2xl font-bold tracking-tight">Portfolio Analytics</h1>
+                <h1 className="text-2xl font-bold tracking-tight">Asset Overview</h1>
                 <p className="text-sm text-muted-foreground">
-                    Real-time dynamic allocation metrics built from the latest valuation updates.
+                    Asset overview built from the latest valuation updates.
                 </p>
             </div>
 

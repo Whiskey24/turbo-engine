@@ -19,7 +19,7 @@ const formatToEuroCurrency = (value: number) => {
     return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(value);
 };
 
-export default function TransactionsPage() {
+export default function ValuationLedgerPage() {
     const [assets, setAssets] = useState<PortfolioAssetSummary[]>([]);
     const [ledger, setLedger] = useState<ValuationLedgerRow[]>([]);
 
@@ -199,7 +199,7 @@ export default function TransactionsPage() {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-2xl font-bold tracking-tight">Transactional Ledger</h1>
+                <h1 className="text-2xl font-bold tracking-tight">Valuation Ledger</h1>
                 <p className="text-sm text-muted-foreground">Log or manage asset valuations and liquid account checkpoints across targeted timelines.</p>
             </div>
 
