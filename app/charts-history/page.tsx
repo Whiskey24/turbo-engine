@@ -70,8 +70,14 @@ export default function ChartsHistoryPage() {
             for (const v of valuations) {
                 yearsSet.add(Number.parseInt(v.valuation_date.slice(0, 4), 10));
             }
-            // Include current year as well
-            yearsSet.add(new Date().getFullYear());
+
+            // Only add the current calendar year if we have already crossed Dec 31st of this year
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            const currentYearEnd = new Date(`${currentYear}-12-31`);
+            if (today >= currentYearEnd) {
+                yearsSet.add(currentYear);
+            }
 
             const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
 
