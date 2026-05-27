@@ -18,6 +18,15 @@ const VALID_TYPE_SLUGS = [
     "OTHER",
 ] as const;
 
+const ASSET_TYPE_LABELS: Record<typeof VALID_TYPE_SLUGS[number], string> = {
+    BANK_ACCOUNT: "Bank Account / Cash",
+    STOCK: "Individual Stocks",
+    CRYPTO: "Cryptocurrency",
+    FUND_ETF: "Mutual Funds & ETFs",
+    REAL_ESTATE: "Real Estate Property",
+    OTHER: "Other Assets / Miscellaneous",
+};
+
 type SlugRequirements = {
     requires_iban: boolean;
     requires_ticker: boolean;
@@ -199,7 +208,6 @@ export default function AssetConfigurationPage() {
         }
     };
 
-    // --- SAFE DELETION ROUTINES ---
     const handleDeleteType = async (id: string, name: string) => {
         if (!confirm(`Are you sure you want to delete the "${name}" template classification?`)) return;
 
@@ -216,7 +224,6 @@ export default function AssetConfigurationPage() {
         }
     };
 
-    // --- EDIT DIALOG HANDLERS ---
     const openEditDialog = (asset: PortfolioAssetWithType) => {
         setEditingAsset(asset);
         setEditTypeId(asset.type_id);
@@ -290,43 +297,49 @@ export default function AssetConfigurationPage() {
                 <p className="text-sm text-muted-foreground">Maintain asset types and assets.</p>
             </div>
 
+            {/* BLOCK 1: ASSET TYPE ENGINE PANELS */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
-                {/* TYPE CONFIGURATION FRAME */}
-                <div className="space-y-6 lg:col-span-1">
-                    <Card className="shadow-sm">
+                {/* COLUMN 1: MAINTAIN ASSET TYPES */}
+                {/* 🌟 min-h-[396px] matches the overall structural footprint of the 8-card grid sidecar */}
+                <Card className="shadow-sm lg:col-span-1 min-h-[419px] max-h-[419px] flex flex-col justify-between">
+                    <div>
                         <CardHeader>
-                            <CardTitle className="text-base">1. Maintain Asset Types</CardTitle>
-                            <CardDescription>Define system categories rules constraints.</CardDescription>
+                            <CardTitle className="text-base">Create Asset Types</CardTitle>
+                            <CardDescription>Define asset types to group your assets.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleCreateType} className="space-y-4">
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Type Category Label</label>
-                                    <input
-                                        type="text" value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)}
-                                        placeholder="e.g., Cash, Crypto Tokens" className="border rounded-md p-2 bg-background text-sm" required
-                                    />
-                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">Asset type label</label>
+                                        <input
+                                            type="text" value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)}
+                                            placeholder="e.g., Cash, Crypto Tokens" className="border rounded-md p-2 bg-background text-sm" required
+                                        />
+                                    </div>
 
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Asset Type Slug</label>
-                                    <select
-                                        value={typeSlug}
-                                        onChange={(e) => setTypeSlug(e.target.value)}
-                                        className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
-                                        required
-                                    >
-                                        <option value="" disabled>-- Select a classification --</option>
-                                        {VALID_TYPE_SLUGS.map((slug) => (
-                                            <option key={slug} value={slug}>{slug}</option>
-                                        ))}
-                                    </select>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">Asset classification</label>
+                                        <select
+                                            value={typeSlug}
+                                            onChange={(e) => setTypeSlug(e.target.value)}
+                                            className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
+                                            required
+                                        >
+                                            <option value="" disabled>-- Select a classification --</option>
+                                            {VALID_TYPE_SLUGS.map((slug) => (
+                                                <option key={slug} value={slug}>
+                                                    {ASSET_TYPE_LABELS[slug]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
 
                                 {typeSlug && (
                                     <div className="space-y-2 border rounded-md p-3 bg-muted/40">
-                                        <p className="text-xs font-semibold text-muted-foreground mb-1.5">Required Data Parameters (auto-derived):</p>
+                                        <p className="text-xs font-semibold text-muted-foreground mb-1.5">Required Data Parameters:</p>
                                         {(() => {
                                             const reqs = getSlugRequirements(typeSlug);
                                             const hasAny = reqs.requires_iban || reqs.requires_ticker || reqs.requires_isin;
@@ -334,7 +347,7 @@ export default function AssetConfigurationPage() {
                                                 return <p className="text-xs text-muted-foreground italic">None — no additional parameters required.</p>;
                                             }
                                             return (
-                                                <>
+                                                <div className="grid grid-cols-1 gap-2">
                                                     {reqs.requires_iban && (
                                                         <div className="flex items-center gap-2.5 text-sm font-normal">
                                                             <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
@@ -353,35 +366,42 @@ export default function AssetConfigurationPage() {
                                                             <span>Requires ISIN</span>
                                                         </div>
                                                     )}
-                                                </>
+                                                </div>
                                             );
                                         })()}
                                     </div>
                                 )}
 
-                                <button type="submit" disabled={loadingType} className="w-full bg-secondary text-secondary-foreground font-medium py-2 rounded-md transition hover:opacity-90 text-sm">
-                                    {loadingType ? "Processing..." : "Register Type Template"}
+                                <button type="submit" disabled={loadingType} className="w-full bg-secondary text-secondary-foreground font-medium py-2 rounded-md transition hover:opacity-90 text-sm mt-2 cursor-pointer disabled:cursor-not-allowed">
+                                    {loadingType ? "Processing..." : "Create Asset Type"}
                                 </button>
                             </form>
                         </CardContent>
-                    </Card>
+                    </div>
+                </Card>
 
-                    {/* ACTIVE TEMPLATES SHELF */}
-                    <div className="space-y-2">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">Active Structural Blueprint Matrix</h4>
-                        <div className="bg-card border rounded-md divide-y text-xs">
-                            {types.length === 0 ? (
-                                <p className="p-3 text-muted-foreground text-center">No categories registered.</p>
-                            ) : types.map(t => {
+                {/* COLUMNS 2 & 3: DEFINED ASSET TYPES */}
+                <div className="space-y-2 h-full lg:col-span-2">
+
+                    {types.length === 0 ? (
+                        <div className="bg-card border border-dashed rounded-md p-6 text-muted-foreground text-center text-sm min-h-[419px] flex items-center justify-center">
+                            No asset types registered.
+                        </div>
+                    ) : (
+                        /* min-h-[340px] and max-h-[340px] guarantees explicit room to display 10 items layout (5 rows across 2 parallel columns) before invoking internal scrolling track constraints */
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[419px] max-h-[419px] overflow-y-auto pr-1 content-start">
+                            {types.map(t => {
                                 const tReqs = requiresForType(t);
                                 return (
-                                    <div key={t.id} className="p-2.5 flex justify-between items-center group">
+                                    <div key={t.id} className="bg-card border rounded-md p-3 flex justify-between items-center group shadow-sm h-[71px]">
                                         <div className="flex flex-col gap-0.5">
-                                            <span className="font-semibold text-foreground">{t.name}</span>
-                                            <span className="text-[10px] font-mono text-muted-foreground">
-                                                {t.type_slug ?? "NO_SLUG"}
+                                            <span className="font-semibold text-foreground text-xs">{t.name}</span>
+                                            <span className="text-[10px] font-medium text-muted-foreground">
+                                                {t.type_slug && t.type_slug in ASSET_TYPE_LABELS
+                                                    ? ASSET_TYPE_LABELS[t.type_slug as keyof typeof ASSET_TYPE_LABELS]
+                                                    : (t.type_slug ?? "Unclassified")}
                                             </span>
-                                            <div className="flex gap-1 text-[9px] font-mono text-muted-foreground">
+                                            <div className="flex gap-1 text-[9px] font-mono text-muted-foreground mt-0.5">
                                                 {tReqs.requires_iban && <span>[IBAN]</span>}
                                                 {tReqs.requires_ticker && <span>[TICKER]</span>}
                                                 {tReqs.requires_isin && <span>[ISIN]</span>}
@@ -398,144 +418,142 @@ export default function AssetConfigurationPage() {
                                 );
                             })}
                         </div>
-                    </div>
+                    )}
                 </div>
+            </div>
 
-                {/* ACCOUNT PROFILE MATRIX FRAME */}
-                <div className="lg:col-span-2 space-y-6">
-                    <Card className="shadow-sm">
-                        <CardHeader>
-                            <CardTitle className="text-base">2. Register Asset Accounts</CardTitle>
-                            <CardDescription>Setup specific financial accounts tied to database structural rules types.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {types.length === 0 ? (
-                                <div className="text-center py-6 text-sm text-muted-foreground">
-                                    Register at least one Asset Type template rule on the left before allocating accounts.
+            {/* BLOCK 2: REGISTER ASSET ACCOUNTS (FULL PAGE WIDTH) */}
+            <Card className="shadow-sm w-full">
+                <CardHeader>
+                    <CardTitle className="text-base">Create Assets</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {types.length === 0 ? (
+                        <div className="text-center py-6 text-sm text-muted-foreground">
+                            Register at least one asset type above before registering assets.
+                        </div>
+                    ) : (
+                        <form onSubmit={handleCreateAsset} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Account Name</label>
+                                <input type="text" value={assetName} onChange={(e) => setAssetName(e.target.value)} placeholder="e.g., Personal Portfolio Reserve" className="border rounded-md p-2 bg-background text-sm" required />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Asset type</label>
+                                <select
+                                    value={selectedTypeId} onChange={(e) => setSelectedTypeId(e.target.value)}
+                                    className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
+                                >
+                                    {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </select>
+                            </div>
+
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Custodian Bank / Broker</label>
+                                <input type="text" value={institution} onChange={(e) => setInstitution(e.target.value)} placeholder="e.g., DEGIRO, ING Bank" className="border rounded-md p-2 bg-background text-sm" required />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Login Portal Url (Optional)</label>
+                                <input type="url" value={loginUrl} onChange={(e) => setLoginUrl(e.target.value)} placeholder="https://login.bank.com" className="border rounded-md p-2 bg-background text-sm" />
+                            </div>
+
+                            {createReqs.requires_iban && (
+                                <div className="flex flex-col gap-1.5 md:col-span-2">
+                                    <label className="text-xs font-medium text-muted-foreground">IBAN Number</label>
+                                    <input type="text" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="NL00 BANK 0123 4567 89" className="border rounded-md p-2 bg-background text-sm uppercase" required />
                                 </div>
-                            ) : (
-                                <form onSubmit={handleCreateAsset} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-medium text-muted-foreground">Mapped Asset Type Definition</label>
-                                        <select
-                                            value={selectedTypeId} onChange={(e) => setSelectedTypeId(e.target.value)}
-                                            className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
+                            )}
+
+                            {createReqs.requires_ticker && (
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Ticker Symbol</label>
+                                    <input type="text" value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="e.g., AAPL, BTC" className="border rounded-md p-2 bg-background text-sm uppercase" required />
+                                </div>
+                            )}
+
+                            {createReqs.requires_isin && (
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">ISIN Number</label>
+                                    <input type="text" value={isin} onChange={(e) => setIsin(e.target.value)} placeholder="US0378331002" className="border rounded-md p-2 bg-background text-sm uppercase" required />
+                                </div>
+                            )}
+
+                            <div className="flex flex-col gap-1.5 md:col-span-2">
+                                <label className="text-xs font-medium text-muted-foreground">Notes</label>
+                                <textarea value={comments} onChange={(e) => setComments(e.target.value)} placeholder="Add any commments or notes here..." className="border rounded-md p-2 bg-background text-sm min-h-16" />
+                            </div>
+
+                            <div className="md:col-span-2 pt-2">
+                                <button type="submit" disabled={loadingAsset} className="w-full bg-secondary text-secondary-foreground font-medium py-2 rounded-md transition hover:opacity-90 text-sm cursor-pointer disabled:cursor-not-allowed">
+                                    {loadingAsset ? "Creeating Asset..." : "Create Asset"}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* BLOCK 3: REGISTERED ACTIVE ASSETS GRID */}
+            <div className="space-y-3 w-full">
+                <h3 className="text-base font-semibold px-1">Registered Assets</h3>
+                {assets.length === 0 ? (
+                    <div className="border border-dashed rounded-xl h-32 flex items-center justify-center text-muted-foreground text-sm bg-card">
+                        No assets registered.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {assets.map((asset) => (
+                            <Card key={asset.id} className="shadow-sm relative group">
+                                <CardHeader className="pb-2">
+                                    <div className="flex justify-between items-start pr-8">
+                                        <div>
+                                            <CardTitle className="text-sm font-bold">{asset.name}</CardTitle>
+                                            <CardDescription className="text-xs">{asset.institution}</CardDescription>
+                                        </div>
+                                        <span className="text-[10px] font-bold bg-secondary text-secondary-foreground px-2 py-0.5 rounded tracking-wider">
+                                            {asset.asset_types?.name || "Asset"}
+                                        </span>
+                                    </div>
+                                    <div className="absolute top-4 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition">
+                                        <button
+                                            onClick={() => openEditDialog(asset)}
+                                            className="text-muted-foreground hover:text-primary p-1 rounded transition"
+                                            title="Edit asset profile"
                                         >
-                                            {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                        </select>
-                                    </div>
-
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-medium text-muted-foreground">Account Description Name</label>
-                                        <input type="text" value={assetName} onChange={(e) => setAssetName(e.target.value)} placeholder="e.g., Personal Portfolio Reserve" className="border rounded-md p-2 bg-background text-sm" required />
-                                    </div>
-
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-medium text-muted-foreground">Custodian Bank / Broker</label>
-                                        <input type="text" value={institution} onChange={(e) => setInstitution(e.target.value)} placeholder="e.g., DEGIRO, ING Bank" className="border rounded-md p-2 bg-background text-sm" required />
-                                    </div>
-
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-medium text-muted-foreground">Login Portal Url (Optional)</label>
-                                        <input type="url" value={loginUrl} onChange={(e) => setLoginUrl(e.target.value)} placeholder="https://login.bank.com" className="border rounded-md p-2 bg-background text-sm" />
-                                    </div>
-
-                                    {createReqs.requires_iban && (
-                                        <div className="flex flex-col gap-1.5 md:col-span-2">
-                                            <label className="text-xs font-medium text-muted-foreground">IBAN Number</label>
-                                            <input type="text" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="NL00 BANK 0123 4567 89" className="border rounded-md p-2 bg-background text-sm uppercase" required />
-                                        </div>
-                                    )}
-
-                                    {createReqs.requires_ticker && (
-                                        <div className="flex flex-col gap-1.5">
-                                            <label className="text-xs font-medium text-muted-foreground">Ticker Symbol</label>
-                                            <input type="text" value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="e.g., AAPL, BTC" className="border rounded-md p-2 bg-background text-sm uppercase" required />
-                                        </div>
-                                    )}
-
-                                    {createReqs.requires_isin && (
-                                        <div className="flex flex-col gap-1.5">
-                                            <label className="text-xs font-medium text-muted-foreground">ISIN Number</label>
-                                            <input type="text" value={isin} onChange={(e) => setIsin(e.target.value)} placeholder="US0378331002" className="border rounded-md p-2 bg-background text-sm uppercase" required />
-                                        </div>
-                                    )}
-
-                                    <div className="flex flex-col gap-1.5 md:col-span-2">
-                                        <label className="text-xs font-medium text-muted-foreground">Comments / Internal Allocation Directives</label>
-                                        <textarea value={comments} onChange={(e) => setComments(e.target.value)} placeholder="Add structural terms or maturity notes here..." className="border rounded-md p-2 bg-background text-sm min-h-16" />
-                                    </div>
-
-                                    <div className="md:col-span-2 pt-2">
-                                        <button type="submit" disabled={loadingAsset} className="w-full bg-primary text-primary-foreground font-medium py-2 rounded-md transition hover:opacity-90 text-sm">
-                                            {loadingAsset ? "Registering Asset Account..." : "Save Configured Asset Profile"}
+                                            <Pencil className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteAsset(asset.id, asset.name)}
+                                            className="text-muted-foreground hover:text-destructive p-1 rounded transition"
+                                            title="Remove account entry profile"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
                                         </button>
                                     </div>
-                                </form>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* ACTIVE REGISTRY ENTITIES CARDS */}
-                    <div className="space-y-3">
-                        <h3 className="text-base font-semibold px-1">Registered Active Assets</h3>
-                        {assets.length === 0 ? (
-                            <div className="border border-dashed rounded-xl h-32 flex items-center justify-center text-muted-foreground text-sm bg-card">
-                                No active accounts structural matrix mapped yet.
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {assets.map((asset) => (
-                                    <Card key={asset.id} className="shadow-sm relative group">
-                                        <CardHeader className="pb-2">
-                                            <div className="flex justify-between items-start pr-8">
-                                                <div>
-                                                    <CardTitle className="text-sm font-bold">{asset.name}</CardTitle>
-                                                    <CardDescription className="text-xs">{asset.institution}</CardDescription>
-                                                </div>
-                                                <span className="text-[10px] font-bold bg-secondary text-secondary-foreground px-2 py-0.5 rounded tracking-wider">
-                                                    {asset.asset_types?.name || "Asset"}
-                                                </span>
-                                            </div>
-                                            {/* Floating Hover Action buttons */}
-                                            <div className="absolute top-4 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition">
-                                                <button
-                                                    onClick={() => openEditDialog(asset)}
-                                                    className="text-muted-foreground hover:text-primary p-1 rounded transition"
-                                                    title="Edit asset profile"
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteAsset(asset.id, asset.name)}
-                                                    className="text-muted-foreground hover:text-destructive p-1 rounded transition"
-                                                    title="Remove account entry profile"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="text-xs space-y-1.5 text-muted-foreground pt-0">
-                                            {asset.iban && <p><span className="font-medium text-foreground">IBAN:</span> {formatIBAN(asset.iban)}</p>}
-                                            {asset.ticker && <p><span className="font-medium text-foreground">Ticker:</span> {asset.ticker}</p>}
-                                            {asset.isin && <p><span className="font-medium text-foreground">ISIN:</span> {asset.isin}</p>}
-                                            {latestValuations[asset.id] ? (
-                                                <div className="flex justify-between items-center border-t pt-1.5 mt-1.5 text-foreground">
-                                                    <span>Last Valuation: <strong className="font-medium">{formatToEuroDate(latestValuations[asset.id].valuation_date)}</strong></span>
-                                                    <span className="font-bold text-primary">{formatToEuroCurrency(latestValuations[asset.id].balance_amount)}</span>
-                                                </div>
-                                            ) : (
-                                                <p className="italic border-t pt-1.5 mt-1.5">No valuation logged yet.</p>
-                                            )}
-                                            {asset.comments && <p className="italic border-t pt-1.5 mt-1.5">{asset.comments}</p>}
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
+                                </CardHeader>
+                                <CardContent className="text-xs space-y-1.5 text-muted-foreground pt-0">
+                                    {asset.iban && <p><span className="font-medium text-foreground">IBAN:</span> {formatIBAN(asset.iban)}</p>}
+                                    {asset.ticker && <p><span className="font-medium text-foreground">Ticker:</span> {asset.ticker}</p>}
+                                    {asset.isin && <p><span className="font-medium text-foreground">ISIN:</span> {asset.isin}</p>}
+                                    {latestValuations[asset.id] ? (
+                                        <div className="flex justify-between items-center border-t pt-1.5 mt-1.5 text-foreground">
+                                            <span>Last Valuation: <strong className="font-medium">{formatToEuroDate(latestValuations[asset.id].valuation_date)}</strong></span>
+                                            <span className="font-bold text-primary">{formatToEuroCurrency(latestValuations[asset.id].balance_amount)}</span>
+                                        </div>
+                                    ) : (
+                                        <p className="italic border-t pt-1.5 mt-1.5">No valuation logged yet.</p>
+                                    )}
+                                    {asset.comments && <p className="italic border-t pt-1.5 mt-1.5 text-muted-foreground/90 truncate max-w-full" title={asset.comments}>{asset.comments}</p>}
+                                </CardContent>
+                            </Card>
+                        ))}
                     </div>
-                </div>
-
+                )}
             </div>
 
             {/* EDIT ASSET DIALOG OVERLAY */}
