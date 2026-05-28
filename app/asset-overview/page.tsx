@@ -1,11 +1,12 @@
 "use client";
-import { useCallback, useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, Label } from "recharts";
 import { Wallet, Landmark, TrendingUp } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
 import type { PortfolioAssetWithTypeName } from "@/lib/database";
+import { getUserSettings } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 import { CHART_COLORS } from "@/lib/chart-colors";
 import { formatIBAN } from "@/lib/utils";
@@ -34,8 +35,8 @@ interface AssetTableRow {
     isin: string | null;
 }
 
-const formatEuro = (num: number) => {
-    return new Intl.NumberFormat("nl-NL", {
+const formatEuro = (num: number, locale: string) => {
+    return new Intl.NumberFormat(locale, {
         style: "currency",
         currency: "EUR",
         minimumFractionDigits: 0,
@@ -49,6 +50,7 @@ export default function DashboardAnalyticsPage() {
     const [assetTypes, setAssetTypes] = useState<string[]>([]);
     const [totalPortfolioValue, setTotalPortfolioValue] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [locale, setLocale] = useState<string>("en-GB");
 
     const loadDashboard = useCallback(async () => {
         try {
@@ -135,6 +137,10 @@ export default function DashboardAnalyticsPage() {
 
     usePortfolioDataRefresh(loadDashboard);
 
+    useEffect(() => {
+        getUserSettings().then((prefs) => { if (prefs.locale) setLocale(prefs.locale); });
+    }, []);
+
     if (loading) {
         return (
             <div className="h-64 flex items-center justify-center text-sm text-muted-foreground animate-pulse">
@@ -161,7 +167,7 @@ export default function DashboardAnalyticsPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold tracking-tight text-foreground">
-                            {formatEuro(totalPortfolioValue)}
+                            {formatEuro(totalPortfolioValue, locale)}
                         </div>
                         <p className="text-[10px] text-muted-foreground mt-0.5">Sum of all latest recorded points</p>
                     </CardContent>
@@ -234,7 +240,7 @@ export default function DashboardAnalyticsPage() {
                                                     <div className="bg-card border rounded-lg p-3 text-xs shadow-md space-y-1">
                                                         <p className="font-semibold text-foreground">{d.name}</p>
                                                         <p className="text-muted-foreground">
-                                                            {percentage}% &middot; {formatEuro(value)}
+                                                            {percentage}% &middot; {formatEuro(value, locale)}
                                                         </p>
                                                     </div>
                                                 );
@@ -265,7 +271,7 @@ export default function DashboardAnalyticsPage() {
                                                 <span className="font-semibold text-foreground">{row.name}</span>
                                             </div>
                                             <div className="text-right">
-                                                <div className="font-bold text-foreground font-mono">{formatEuro(row.value)}</div>
+                                                <div className="font-bold text-foreground font-mono">{formatEuro(row.value, locale)}</div>
                                                 <div className="text-[10px] text-muted-foreground font-mono">{sharePercentage}%</div>
                                             </div>
                                         </div>
@@ -332,7 +338,7 @@ export default function DashboardAnalyticsPage() {
                                             </td>
                                             {assetTypes.map((typeName) => (
                                                 <td key={typeName} className="py-2 px-4 text-right font-mono text-foreground">
-                                                    {row.assetType === typeName ? formatEuro(row.balance) : ''}
+                                                    {row.assetType === typeName ? formatEuro(row.balance, locale) : ''}
                                                 </td>
                                             ))}
                                         </tr>
@@ -345,7 +351,7 @@ export default function DashboardAnalyticsPage() {
                                                 .reduce((sum, row) => sum + row.balance, 0);
                                             return (
                                                 <td key={typeName} className="py-3 px-4 text-right font-mono text-foreground">
-                                                    {formatEuro(total)}
+                                                    {formatEuro(total, locale)}
                                                 </td>
                                             );
                                         })}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     Area,
     AreaChart,
@@ -17,20 +17,21 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
+import { getUserSettings } from "@/lib/database";
 import { buildYearEndAllocationByType, type YearEndChartRow } from "@/lib/year-end-allocation";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 import { CHART_COLORS } from "@/lib/chart-colors";
 
-const formatEuro = (value: number) =>
-    new Intl.NumberFormat("nl-NL", {
+const formatEuro = (value: number, locale: string) =>
+    new Intl.NumberFormat(locale, {
         style: "currency",
         currency: "EUR",
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
     }).format(value);
 
-const formatCompact = (value: number) =>
-    new Intl.NumberFormat("nl-NL", {
+const formatCompact = (value: number, locale: string) =>
+    new Intl.NumberFormat(locale, {
         notation: "compact",
         compactDisplay: "short",
     }).format(value);
@@ -41,6 +42,7 @@ export default function YearEndAllocationChart() {
     const [chartData, setChartData] = useState<YearEndChartRow[]>([]);
     const [typeNames, setTypeNames] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
+    const [locale, setLocale] = useState<string>("en-GB");
     const [chartVariant, setChartVariant] = useState<ChartVariant>("bar");
 
     const loadChart = useCallback(async () => {
@@ -86,6 +88,10 @@ export default function YearEndAllocationChart() {
     }, []);
 
     usePortfolioDataRefresh(loadChart);
+
+    useEffect(() => {
+        getUserSettings().then((prefs) => { if (prefs.locale) setLocale(prefs.locale); });
+    }, []);
 
     return (
         <Card className="shadow-sm">
@@ -137,11 +143,12 @@ export default function YearEndAllocationChart() {
                     <div className="h-80 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             {chartVariant === "bar" ? (
-                                <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                                <BarChart data={chartData} margin={{ top: 20, right: 8, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" opacity={0.2} vertical={false} />
-                                    <XAxis dataKey="label" tickLine={false} axisLine={false} className="text-xs" />
+                                    <XAxis dataKey="label" tickLine={false} axisLine={false} className="text-xs"
+                                        tickFormatter={(label) => String(label).slice(-4)} />
                                     <YAxis
-                                        tickFormatter={(value) => formatCompact(Number(value))}
+                                        tickFormatter={(value) => formatCompact(Number(value), locale)}
                                         tickLine={false}
                                         axisLine={false}
                                         className="text-xs"
@@ -151,10 +158,10 @@ export default function YearEndAllocationChart() {
                                             if (!active || !payload || payload.length === 0) return null;
                                             return (
                                                 <div className="bg-card border rounded-lg p-3 text-xs shadow-md space-y-1">
-                                                    <p className="font-semibold text-foreground">{label}</p>
+                                                    <p className="font-semibold text-foreground">{String(label).slice(-4)}</p>
                                                     {payload.map((entry) => (
                                                         <p key={entry.name} className="text-muted-foreground">
-                                                            {entry.name}: {formatEuro(entry.value as number)}
+                                                            {entry.name}: {formatEuro(entry.value as number, locale)}
                                                         </p>
                                                     ))}
                                                 </div>
@@ -185,7 +192,7 @@ export default function YearEndAllocationChart() {
                                                                 className="text-xs fill-muted-foreground"
                                                                 style={{ fontSize: 11 }}
                                                             >
-                                                                {formatEuro(value as number)}
+                                                                {formatEuro(value as number, locale)}
                                                             </text>
                                                         );
                                                     }}
@@ -197,13 +204,12 @@ export default function YearEndAllocationChart() {
                             ) : (
                                 <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" opacity={0.2} vertical={false} />
-                                    <XAxis dataKey="label" tickLine={false} axisLine={false} className="text-xs" />
+                                    <XAxis dataKey="label" tickLine={false} axisLine={false} className="text-xs"
+                                        tickFormatter={(label) => String(label).slice(-4)}
+                                    />
                                     <YAxis
                                         tickFormatter={(value) =>
-                                            new Intl.NumberFormat("nl-NL", {
-                                                notation: "compact",
-                                                compactDisplay: "short",
-                                            }).format(Number(value))
+                                            formatCompact(Number(value), locale)
                                         }
                                         tickLine={false}
                                         axisLine={false}
@@ -214,10 +220,10 @@ export default function YearEndAllocationChart() {
                                             if (!active || !payload || payload.length === 0) return null;
                                             return (
                                                 <div className="bg-card border rounded-lg p-3 text-xs shadow-md space-y-1">
-                                                    <p className="font-semibold text-foreground">{label}</p>
+                                                    <p className="font-semibold text-foreground">{String(label).slice(-4)}</p>
                                                     {payload.map((entry) => (
                                                         <p key={entry.name} className="text-muted-foreground">
-                                                            {entry.name}: {formatEuro(entry.value as number)}
+                                                            {entry.name}: {formatEuro(entry.value as number, locale)}
                                                         </p>
                                                     ))}
                                                 </div>

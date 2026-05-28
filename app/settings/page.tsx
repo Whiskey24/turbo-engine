@@ -5,6 +5,7 @@ import DataTransferActions from "@/components/data-transfer-actions";
 import DeleteAllDataAction from "@/components/delete-all-data-action";
 import LoginHistory from "@/components/login-history";
 import ChangePassword from "@/components/change-password";
+import LocaleSettings from "@/components/locale-settings";
 import { hasPortfolioData } from "@/lib/database";
 
 export default function SettingsPage() {
@@ -35,6 +36,15 @@ export default function SettingsPage() {
 
         {/* Responsive Grid for Smaller Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 space-y-0">
+
+          {/* Locale & Formatting Section */}
+          <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
+            <h2 className="text-lg font-semibold mb-2">Locale & Formatting</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Set your preferred language and number format
+            </p>
+            <LocaleSettings />
+          </div>
 
           {/* Change Password Section */}
           <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">

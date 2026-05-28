@@ -1,11 +1,12 @@
 "use client";
 export const dynamic = "force-dynamic";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Trash2, Pencil, X, LayoutGrid, Table, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
 import type { AssetType, PortfolioAssetWithType } from "@/lib/database";
+import { getUserSettings } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 import { formatIBAN } from "@/lib/utils";
 
@@ -56,14 +57,14 @@ function requiresForType(type: Pick<AssetType, "type_slug"> | undefined): SlugRe
     return getSlugRequirements(type?.type_slug ?? "");
 }
 
-const formatToEuroDate = (dateStr: string) => {
+const formatDate = (dateStr: string, locale: string) => {
     if (!dateStr) return "";
-    const [year, month, day] = dateStr.split("-");
-    return `${day}-${month}-${year}`;
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(new Date(year, month - 1, day));
 };
 
-const formatToEuroCurrency = (value: number) => {
-    return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(value);
+const formatCurrency = (value: number, locale: string) => {
+    return new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }).format(value);
 };
 
 interface LatestValuation {
@@ -98,6 +99,8 @@ export default function AssetConfigurationPage() {
     const [iban, setIban] = useState("");
     const [isin, setIsin] = useState("");
     const [ticker, setTicker] = useState("");
+
+    const [locale, setLocale] = useState<string>("en-GB");
 
     const [loadingType, setLoadingType] = useState(false);
     const [loadingAsset, setLoadingAsset] = useState(false);
@@ -165,6 +168,10 @@ export default function AssetConfigurationPage() {
     }, []);
 
     usePortfolioDataRefresh(fetchData);
+
+    useEffect(() => {
+        getUserSettings().then((prefs) => { if (prefs.locale) setLocale(prefs.locale); });
+    }, []);
 
     const handleCreateType = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -680,9 +687,8 @@ export default function AssetConfigurationPage() {
                                     {asset.isin && <p><span className="font-medium text-foreground">ISIN:</span> {asset.isin}</p>}
                                     {latestValuations[asset.id] ? (
                                         <div className="flex justify-between items-center border-t pt-1.5 mt-1.5 text-foreground">
-                                            <span>Last Valuation: <strong className="font-medium">{formatToEuroDate(latestValuations[asset.id].valuation_date)}</strong></span>
-                                            <span className="font-bold text-primary">{formatToEuroCurrency(latestValuations[asset.id].balance_amount)}</span>
-                                        </div>
+                                            <span>Last Valuation: <strong className="font-medium">{formatDate(latestValuations[asset.id].valuation_date, locale)}</strong></span>
+                                            <span className="font-bold text-primary">{formatCurrency(latestValuations[asset.id].balance_amount, locale)}</span>                                        </div>
                                     ) : (
                                         <p className="italic border-t pt-1.5 mt-1.5">No valuation logged yet.</p>
                                     )}
@@ -767,9 +773,8 @@ export default function AssetConfigurationPage() {
                                             <td className="p-3 text-right">
                                                 {valuation ? (
                                                     <div className="flex flex-col">
-                                                        <span className="font-bold text-primary">{formatToEuroCurrency(valuation.balance_amount)}</span>
-                                                        <span className="text-[10px] text-muted-foreground">{formatToEuroDate(valuation.valuation_date)}</span>
-                                                    </div>
+                                                        <span className="font-bold text-primary">{formatCurrency(valuation.balance_amount, locale)}</span>
+                                                        <span className="text-[10px] text-muted-foreground">{formatDate(valuation.valuation_date, locale)}</span>                                                    </div>
                                                 ) : (
                                                     <span className="italic text-muted-foreground/60">No records</span>
                                                 )}

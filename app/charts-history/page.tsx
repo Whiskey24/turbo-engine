@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/lib/supabase";
 import type { PortfolioAssetWithTypeName } from "@/lib/database";
+import { getUserSettings } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 import { CHART_COLORS } from "@/lib/chart-colors";
 import { formatIBAN } from "@/lib/utils";
@@ -20,8 +21,8 @@ interface AssetTableRow {
     isin: string | null;
 }
 
-const formatEuro = (num: number) => {
-    return new Intl.NumberFormat("nl-NL", {
+const formatEuro = (num: number, locale: string) => {
+    return new Intl.NumberFormat(locale, {
         style: "currency",
         currency: "EUR",
         minimumFractionDigits: 0,
@@ -39,6 +40,7 @@ export default function ChartsHistoryPage() {
     const [selectedYear, setSelectedYear] = useState<number | null>(null);
     const [assetTypes, setAssetTypes] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
+    const [locale, setLocale] = useState<string>("en-GB");
 
     const loadYearEndData = useCallback(async () => {
         try {
@@ -145,6 +147,10 @@ export default function ChartsHistoryPage() {
     }, []);
 
     usePortfolioDataRefresh(loadYearEndData);
+
+    useEffect(() => {
+        getUserSettings().then((prefs) => { if (prefs.locale) setLocale(prefs.locale); });
+    }, []);
 
     const currentTableRows = selectedYear ? (allYearData.get(selectedYear) ?? []) : [];
 
@@ -273,7 +279,7 @@ export default function ChartsHistoryPage() {
                                             </td>
                                             {currentYearTypes.map((typeName) => (
                                                 <td key={typeName} className="py-2 px-4 text-right font-mono text-foreground">
-                                                    {row.assetType === typeName ? formatEuro(row.balance) : ""}
+                                                    {row.assetType === typeName ? formatEuro(row.balance, locale) : ""}
                                                 </td>
                                             ))}
                                         </tr>
@@ -286,7 +292,7 @@ export default function ChartsHistoryPage() {
                                                 .reduce((sum, row) => sum + row.balance, 0);
                                             return (
                                                 <td key={typeName} className="py-3 px-4 text-right font-mono text-foreground">
-                                                    {formatEuro(total)}
+                                                    {formatEuro(total, locale)}
                                                 </td>
                                             );
                                         })}

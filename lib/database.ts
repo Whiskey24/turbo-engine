@@ -1,6 +1,6 @@
 import type { QueryData } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import type { Tables, TablesInsert } from "@/lib/database.types";
+import type { Json, Tables, TablesInsert } from "@/lib/database.types";
 
 export type { Database, Tables, TablesInsert } from "@/lib/database.types";
 
@@ -95,4 +95,42 @@ export async function hasPortfolioData(): Promise<boolean> {
         .eq("user_id", userId);
 
     return (valuationCount ?? 0) > 0;
+}
+
+// ---- User Settings ----
+
+export interface UserPreferences {
+    locale?: string;
+}
+
+export async function getUserSettings(): Promise<UserPreferences> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) return {};
+
+    const { data, error } = await supabase
+        .from("user_settings")
+        .select("preferences")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+    if (error || !data) return {};
+    return (data.preferences as UserPreferences) ?? {};
+}
+
+export async function upsertUserSettings(
+    preferences: UserPreferences
+): Promise<void> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) throw new Error("Not authenticated");
+
+    const { error } = await supabase
+        .from("user_settings")
+        .upsert(
+            { user_id: userId, preferences: preferences as Json, updated_at: new Date().toISOString() },
+            { onConflict: "user_id" }
+        );
+
+    if (error) throw error;
 }

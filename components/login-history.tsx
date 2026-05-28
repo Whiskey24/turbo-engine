@@ -4,13 +4,17 @@ import { useState, useEffect } from "react";
 import { Tables } from "@/lib/database.types";
 import { supabase } from "@/lib/supabase";
 import { parseUserAgent } from "@/lib/user-agent-utils";
+import { getUserSettings } from "@/lib/database";
 
 export default function LoginHistory() {
   const [logins, setLogins] = useState<Tables<"login_history">[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [locale, setLocale] = useState<string>("en-GB");
 
   useEffect(() => {
+    getUserSettings().then((prefs) => { if (prefs.locale) setLocale(prefs.locale); });
+
     async function fetchLoginHistory() {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
@@ -75,14 +79,7 @@ export default function LoginHistory() {
             return (
               <tr key={login.id}>
                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(login.login_at).toLocaleString('en-GB', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false
-                  })}
+                  {new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "short" }).format(new Date(login.login_at))}
                 </td>
                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                   {parseUserAgent(login.user_agent)}

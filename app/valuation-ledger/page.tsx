@@ -6,17 +6,18 @@ import { Trash2, History, Filter, ArrowUpDown, ArrowUp, ArrowDown } from "lucide
 
 import { supabase } from "@/lib/supabase";
 import type { PortfolioAssetSummary, ValuationLedgerRow, ValuationReference } from "@/lib/database";
+import { getUserSettings } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 
 // Formatting helpers
-const formatToEuroDate = (dateStr: string) => {
+const formatDate = (dateStr: string, locale: string) => {
     if (!dateStr) return "";
-    const [year, month, day] = dateStr.split("-");
-    return `${day}-${month}-${year}`;
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(new Date(year, month - 1, day));
 };
 
-const formatToEuroCurrency = (value: number) => {
-    return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(value);
+const formatCurrency = (value: number, locale: string) => {
+    return new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }).format(value);
 };
 
 export default function ValuationLedgerPage() {
@@ -33,6 +34,7 @@ export default function ValuationLedgerPage() {
     });
     const [balanceAmount, setBalanceAmount] = useState("");
     const [loading, setLoading] = useState(false);
+    const [locale, setLocale] = useState<string>("en-GB");
 
     // Interactive Sorting and Multi-Column Filtering Controls
     const [selectedFilterAssetId, setSelectedFilterAssetId] = useState("ALL");
@@ -115,6 +117,10 @@ export default function ValuationLedgerPage() {
     useEffect(() => {
         fetchLastValuationReference(selectedAssetId);
     }, [selectedAssetId]);
+
+    useEffect(() => {
+        getUserSettings().then((prefs) => { if (prefs.locale) setLocale(prefs.locale); });
+    }, []);
 
     // --- Form Handlers ---
     const handleSubmit = async (e: React.FormEvent) => {
@@ -235,9 +241,8 @@ export default function ValuationLedgerPage() {
                                     <p className="font-semibold text-muted-foreground mb-1">Previous Account Benchmark:</p>
                                     {lastValuation ? (
                                         <div className="flex justify-between items-center text-foreground mt-0.5">
-                                            <span>Last Logged: <strong className="font-medium">{formatToEuroDate(lastValuation.valuation_date)}</strong></span>
-                                            <span className="font-bold text-primary">{formatToEuroCurrency(lastValuation.balance_amount)}</span>
-                                        </div>
+                                            <span>Last Logged: <strong className="font-medium">{formatDate(lastValuation.valuation_date, locale)}</strong></span>
+                                            <span className="font-bold text-primary">{formatCurrency(lastValuation.balance_amount, locale)}</span>                                        </div>
                                     ) : (
                                         <p className="text-muted-foreground italic mt-0.5">No historical timeline coordinates present for this profile asset.</p>
                                     )}
@@ -252,6 +257,11 @@ export default function ValuationLedgerPage() {
                                         className="border rounded-md p-2 bg-background text-sm cursor-pointer"
                                         required
                                     />
+                                    {valuationDate && (
+                                        <p className="text-xs text-muted-foreground">
+                                            {formatDate(valuationDate, locale)}
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="flex flex-col gap-1.5">
@@ -377,7 +387,7 @@ export default function ValuationLedgerPage() {
                                         processedLedger.map((log) => (
                                             <tr key={log.id} className="hover:bg-muted/20 transition">
                                                 <td className="p-3 whitespace-nowrap font-medium font-mono text-foreground">
-                                                    {formatToEuroDate(log.valuation_date)}
+                                                    {formatDate(log.valuation_date, locale)}
                                                 </td>
                                                 <td className="p-3">
                                                     <div className="font-semibold text-foreground">{log.portfolio_assets?.name}</div>
@@ -390,7 +400,7 @@ export default function ValuationLedgerPage() {
                                                     </span>
                                                 </td>
                                                 <td className="p-3 text-right font-bold text-foreground font-mono whitespace-nowrap">
-                                                    {formatToEuroCurrency(log.balance_amount)}
+                                                    {formatCurrency(log.balance_amount, locale)}
                                                 </td>
                                                 <td className="p-3 text-center">
                                                     <button
