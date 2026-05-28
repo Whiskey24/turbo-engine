@@ -24,8 +24,8 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
 
       <div className="space-y-6">
-        {/* Login History Section */}
-        <div className="border rounded-lg p-4">
+        {/* Full Width Login History Section */}
+        <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
           <h2 className="text-lg font-semibold mb-2">Login History</h2>
           <p className="text-sm text-muted-foreground mb-4">
             View your recent login activity
@@ -33,31 +33,36 @@ export default function SettingsPage() {
           <LoginHistory />
         </div>
 
-        {/* Change Password Section */}
-        <div className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">Change Password</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Update your account password
-          </p>
-          <ChangePassword />
-        </div>
+        {/* Responsive Grid for Smaller Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 space-y-0">
 
-        {/* Backup & Restore Section */}
-        <div className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">Backup & Restore</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Export or import your portfolio data
-          </p>
-          <DataTransferActions hasData={hasData} onDataChanged={checkHasData} />
-        </div>
+          {/* Change Password Section */}
+          <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
+            <h2 className="text-lg font-semibold mb-2">Change Password</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Update your account password
+            </p>
+            <ChangePassword />
+          </div>
 
-        {/* Delete My Data Section */}
-        <div className="border rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-2">Delete My Data</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Permanently remove all your portfolio data
-          </p>
-          <DeleteAllDataAction onDataChanged={checkHasData} />
+          {/* Backup & Restore Section */}
+          <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
+            <h2 className="text-lg font-semibold mb-2">Backup & Restore</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Export or import your portfolio data
+            </p>
+            <DataTransferActions hasData={hasData} onDataChanged={checkHasData} />
+          </div>
+
+          {/* Delete My Data Section */}
+          <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
+            <h2 className="text-lg font-semibold mb-2">Delete My Data</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Permanently remove all your portfolio data
+            </p>
+            <DeleteAllDataAction onDataChanged={checkHasData} />
+          </div>
+
         </div>
       </div>
 
