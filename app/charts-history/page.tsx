@@ -67,16 +67,20 @@ export default function ChartsHistoryPage() {
 
             // Collect unique years from valuations
             const yearsSet = new Set<number>();
-            for (const v of valuations) {
-                yearsSet.add(Number.parseInt(v.valuation_date.slice(0, 4), 10));
-            }
-
-            // Only add the current calendar year if we have already crossed Dec 31st of this year
             const today = new Date();
             const currentYear = today.getFullYear();
-            const currentYearEnd = new Date(`${currentYear}-12-31`);
-            if (today >= currentYearEnd) {
-                yearsSet.add(currentYear);
+            // Check if today is exactly Dec 31st
+            const isNewYearsEve = (today.getMonth() === 11 && today.getDate() === 31);
+
+            for (const v of valuations) {
+                const valuationYear = Number.parseInt(v.valuation_date.slice(0, 4), 10);
+
+                // Skip adding if it's the current year and it's NOT Dec 31st yet
+                if (valuationYear === currentYear && !isNewYearsEve) {
+                    continue;
+                }
+
+                yearsSet.add(valuationYear);
             }
 
             const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
