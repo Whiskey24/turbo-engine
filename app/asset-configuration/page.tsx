@@ -690,8 +690,8 @@ export default function AssetConfigurationPage() {
                                 key={type.id}
                                 onClick={() => toggleType(type.id)}
                                 className={`text-xs px-2.5 py-1 rounded-full border font-medium transition cursor-pointer ${selectedTypes.has(type.id)
-                                    ? "bg-secondary text-secondary-foreground border-secondary"
-                                    : "bg-muted text-muted-foreground border-border hover:text-foreground"
+                                        ? "bg-primary text-primary-foreground border-primary"
+                                        : "bg-muted/40 text-muted-foreground/50 border-border/50 hover:text-muted-foreground"
                                     }`}
                             >
                                 {type.name}

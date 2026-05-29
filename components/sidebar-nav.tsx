@@ -11,7 +11,8 @@ import {
     BarChart3,
     LogOut,
     User,
-    BookOpen
+    BookOpen,
+    Layers
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
@@ -22,6 +23,7 @@ const navigationItems = [
     { name: "Valuation Ledger", href: "/valuation-ledger", icon: History },
     { name: "Trading Journal", href: "/trading-journal", icon: BookOpen },
     { name: "Historical Timelines", href: "/historical-timelines", icon: BarChart3 },
+    { name: "Assets", href: "/assets", icon: Layers },
     { name: "Asset configuration", href: "/asset-configuration", icon: Database },
     { name: "Settings", href: "/settings", icon: User },
 ];
