@@ -20,7 +20,7 @@ const VALID_TYPE_SLUGS = [
 ] as const;
 
 const ASSET_TYPE_LABELS: Record<typeof VALID_TYPE_SLUGS[number], string> = {
-    BANK_ACCOUNT: "Bank Account / Cash",
+    BANK_ACCOUNT: "Bank Account",
     STOCK: "Individual Stocks",
     CRYPTO: "Cryptocurrency",
     FUND_ETF: "Mutual Funds & ETFs",
@@ -30,26 +30,28 @@ const ASSET_TYPE_LABELS: Record<typeof VALID_TYPE_SLUGS[number], string> = {
 
 type SlugRequirements = {
     requires_iban: boolean;
+    shows_ticker: boolean;
     requires_ticker: boolean;
+    shows_isin: boolean;
     requires_isin: boolean;
 };
 
 function getSlugRequirements(slug: string): SlugRequirements {
     switch (slug) {
         case "BANK_ACCOUNT":
-            return { requires_iban: true, requires_ticker: false, requires_isin: false };
+            return { requires_iban: true, shows_ticker: false, requires_ticker: false, shows_isin: false, requires_isin: false };
         case "STOCK":
-            return { requires_iban: false, requires_ticker: true, requires_isin: false };
+            return { requires_iban: false, shows_ticker: true, requires_ticker: false, shows_isin: true, requires_isin: false };
         case "CRYPTO":
-            return { requires_iban: false, requires_ticker: true, requires_isin: false };
+            return { requires_iban: false, shows_ticker: true, requires_ticker: true, shows_isin: false, requires_isin: false };
         case "FUND_ETF":
-            return { requires_iban: false, requires_ticker: false, requires_isin: true };
+            return { requires_iban: false, shows_ticker: true, requires_ticker: false, shows_isin: true, requires_isin: false };
         case "REAL_ESTATE":
-            return { requires_iban: false, requires_ticker: false, requires_isin: false };
+            return { requires_iban: false, shows_ticker: false, requires_ticker: false, shows_isin: false, requires_isin: false };
         case "OTHER":
-            return { requires_iban: false, requires_ticker: false, requires_isin: false };
+            return { requires_iban: false, shows_ticker: false, requires_ticker: false, shows_isin: false, requires_isin: false };
         default:
-            return { requires_iban: false, requires_ticker: false, requires_isin: false };
+            return { requires_iban: false, shows_ticker: false, requires_ticker: false, shows_isin: false, requires_isin: false };
     }
 }
 
@@ -254,8 +256,8 @@ export default function AssetConfigurationPage() {
                 login_url: loginUrl || null,
                 comments: comments || null,
                 iban: reqs.requires_iban ? iban : null,
-                ticker: reqs.requires_ticker ? ticker.toUpperCase() : null,
-                isin: reqs.requires_isin ? editIsin.toUpperCase() : null,
+                ticker: reqs.shows_ticker ? (ticker.toUpperCase() || null) : null,
+                isin: reqs.shows_isin ? (isin.toUpperCase() || null) : null,
             },
         ]);
 
@@ -323,8 +325,8 @@ export default function AssetConfigurationPage() {
                 login_url: editLoginUrl || null,
                 comments: editComments || null,
                 iban: reqs.requires_iban ? editIban : null,
-                ticker: reqs.requires_ticker ? editTicker.toUpperCase() : null,
-                isin: reqs.requires_isin ? editIsin.toUpperCase() : null,
+                ticker: reqs.shows_ticker ? (editTicker.toUpperCase() || null) : null,
+                isin: reqs.shows_isin ? (editIsin.toUpperCase() || null) : null,
             })
             .eq("id", editingAsset.id);
 
@@ -485,16 +487,16 @@ export default function AssetConfigurationPage() {
                                                             <span>Requires IBAN</span>
                                                         </div>
                                                     )}
-                                                    {reqs.requires_ticker && (
+                                                    {reqs.shows_ticker && (
                                                         <div className="flex items-center gap-2.5 text-sm font-normal">
                                                             <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
-                                                            <span>Requires Ticker</span>
+                                                            <span>Ticker {reqs.requires_ticker ? "(required)" : "(optional)"}</span>
                                                         </div>
                                                     )}
-                                                    {reqs.requires_isin && (
+                                                    {reqs.shows_isin && (
                                                         <div className="flex items-center gap-2.5 text-sm font-normal">
                                                             <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
-                                                            <span>Requires ISIN</span>
+                                                            <span>ISIN {reqs.requires_isin ? "(required)" : "(optional)"}</span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -532,8 +534,8 @@ export default function AssetConfigurationPage() {
                                             </span>
                                             <div className="flex gap-1 text-[9px] font-mono text-muted-foreground mt-0.5">
                                                 {tReqs.requires_iban && <span>[IBAN]</span>}
-                                                {tReqs.requires_ticker && <span>[TICKER]</span>}
-                                                {tReqs.requires_isin && <span>[ISIN]</span>}
+                                                {tReqs.shows_ticker && <span>[TICKER{tReqs.requires_ticker ? "" : "?"}]</span>}
+                                                {tReqs.shows_isin && <span>[ISIN{tReqs.requires_isin ? "" : "?"}]</span>}
                                             </div>
                                         </div>
                                         <div className="absolute top-2 right-2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition">
@@ -604,17 +606,21 @@ export default function AssetConfigurationPage() {
                                 </div>
                             )}
 
-                            {createReqs.requires_ticker && (
+                            {createReqs.shows_ticker && (
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Ticker Symbol</label>
-                                    <input type="text" value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="e.g., AAPL, BTC" className="border rounded-md p-2 bg-background text-sm uppercase" required />
+                                    <label className="text-xs font-medium text-muted-foreground">
+                                        Ticker Symbol {!createReqs.requires_ticker && <span className="text-muted-foreground font-normal">(optional)</span>}
+                                    </label>
+                                    <input type="text" value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="e.g., AAPL, BTC" className="border rounded-md p-2 bg-background text-sm uppercase" required={createReqs.requires_ticker} />
                                 </div>
                             )}
 
-                            {createReqs.requires_isin && (
+                            {createReqs.shows_isin && (
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">ISIN Number</label>
-                                    <input type="text" value={isin} onChange={(e) => setIsin(e.target.value)} placeholder="US0378331002" className="border rounded-md p-2 bg-background text-sm uppercase" required />
+                                    <label className="text-xs font-medium text-muted-foreground">
+                                        ISIN Number {!createReqs.requires_isin && <span className="text-muted-foreground font-normal">(optional)</span>}
+                                    </label>
+                                    <input type="text" value={isin} onChange={(e) => setIsin(e.target.value)} placeholder="US0378331002" className="border rounded-md p-2 bg-background text-sm uppercase" required={createReqs.requires_isin} />
                                 </div>
                             )}
 
@@ -1037,17 +1043,21 @@ export default function AssetConfigurationPage() {
                                 </div>
                             )}
 
-                            {editReqs.requires_ticker && (
+                            {editReqs.shows_ticker && (
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Ticker Symbol</label>
-                                    <input type="text" value={editTicker} onChange={(e) => setEditTicker(e.target.value)} placeholder="e.g., AAPL, BTC" className="border rounded-md p-2 bg-background text-sm uppercase" required />
+                                    <label className="text-xs font-medium text-muted-foreground">
+                                        Ticker Symbol {!editReqs.requires_ticker && <span className="text-muted-foreground font-normal">(optional)</span>}
+                                    </label>
+                                    <input type="text" value={editTicker} onChange={(e) => setEditTicker(e.target.value)} placeholder="e.g., AAPL, BTC" className="border rounded-md p-2 bg-background text-sm uppercase" required={editReqs.requires_ticker} />
                                 </div>
                             )}
 
-                            {editReqs.requires_isin && (
+                            {editReqs.shows_isin && (
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">ISIN Number</label>
-                                    <input type="text" value={editIsin} onChange={(e) => setEditIsin(e.target.value)} placeholder="US0378331002" className="border rounded-md p-2 bg-background text-sm uppercase" required />
+                                    <label className="text-xs font-medium text-muted-foreground">
+                                        ISIN Number {!editReqs.requires_isin && <span className="text-muted-foreground font-normal">(optional)</span>}
+                                    </label>
+                                    <input type="text" value={editIsin} onChange={(e) => setEditIsin(e.target.value)} placeholder="US0378331002" className="border rounded-md p-2 bg-background text-sm uppercase" required={editReqs.requires_isin} />
                                 </div>
                             )}
 
