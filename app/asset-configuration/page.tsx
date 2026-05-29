@@ -101,6 +101,7 @@ export default function AssetConfigurationPage() {
     const [ticker, setTicker] = useState("");
 
     const [locale, setLocale] = useState<string>("en-GB");
+    const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
 
     const [loadingType, setLoadingType] = useState(false);
     const [loadingAsset, setLoadingAsset] = useState(false);
@@ -144,6 +145,11 @@ export default function AssetConfigurationPage() {
 
         if (fetchTypes) {
             setTypes(fetchTypes);
+            setSelectedTypes((current) =>
+                current.size === 0
+                    ? new Set(fetchTypes.map((t) => t.id))
+                    : current
+            );
             setSelectedTypeId((current) => {
                 if (fetchTypes.length === 0) return "";
                 if (current && fetchTypes.some((type) => type.id === current)) return current;
@@ -400,6 +406,22 @@ export default function AssetConfigurationPage() {
     const createReqs = requiresForType(currentActiveRuleSet);
     const editReqs = requiresForType(editRuleSet);
 
+    const allSelected = types.length > 0 && selectedTypes.size === types.length;
+
+    const toggleType = (id: string) => {
+        setSelectedTypes((prev) => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+
+    const toggleAll = () => {
+        setSelectedTypes(allSelected ? new Set() : new Set(types.map((t) => t.id)));
+    };
+
+    const filteredAssets = sortedAssets.filter((a) => selectedTypes.has(a.type_id));
+
     return (
         <div className="space-y-8">
             <div>
@@ -645,14 +667,45 @@ export default function AssetConfigurationPage() {
                     )}
                 </div>
 
+                {assets.length > 0 && types.length > 1 && (
+                    <div className="flex flex-wrap items-center gap-2 px-1">
+                        <button
+                            onClick={toggleAll}
+                            className={`text-xs px-2.5 py-1 rounded-full border font-medium transition cursor-pointer ${allSelected
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-muted text-muted-foreground border-border hover:text-foreground"
+                                }`}
+                        >
+                            {allSelected ? "Deselect all" : "Select all"}
+                        </button>
+                        <div className="w-px h-4 bg-border" />
+                        {types.map((type) => (
+                            <button
+                                key={type.id}
+                                onClick={() => toggleType(type.id)}
+                                className={`text-xs px-2.5 py-1 rounded-full border font-medium transition cursor-pointer ${selectedTypes.has(type.id)
+                                    ? "bg-secondary text-secondary-foreground border-secondary"
+                                    : "bg-muted text-muted-foreground border-border hover:text-foreground"
+                                    }`}
+                            >
+                                {type.name}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
                 {assets.length === 0 ? (
                     <div className="border border-dashed rounded-xl h-32 flex items-center justify-center text-muted-foreground text-sm bg-card">
                         No assets registered.
                     </div>
+                ) : filteredAssets.length === 0 ? (
+                    <div className="border border-dashed rounded-xl h-32 flex items-center justify-center text-muted-foreground text-sm bg-card">
+                        No assets match the selected filters.
+                    </div>
                 ) : viewMode === "cards" ? (
                     /* ORIGINAL CARDS VIEW MODE */
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {assets.map((asset) => (
+                        {filteredAssets.map((asset) => (
                             <Card key={asset.id} className="shadow-sm relative group">
                                 <CardHeader className="pb-2">
                                     <div className="flex justify-between items-start pr-8">
@@ -744,7 +797,7 @@ export default function AssetConfigurationPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
-                                {sortedAssets.map((asset) => {
+                                {filteredAssets.map((asset) => {
                                     const valuation = latestValuations[asset.id];
                                     return (
                                         <tr key={asset.id} className="hover:bg-muted/30 transition-colors">
