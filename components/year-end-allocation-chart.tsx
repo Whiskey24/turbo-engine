@@ -67,14 +67,34 @@ export default function YearEndAllocationChart() {
             }));
 
             const result = buildYearEndAllocationByType(assetsWithType, valuations ?? []);
-            // Add computed total for each row (used by LabelList)
-            const chartDataWithTotals = result.chartData.map((row) => {
-                const total = result.typeNames.reduce((sum, typeName) => {
-                    const val = row[typeName];
-                    return sum + (typeof val === "number" ? val : 0);
-                }, 0);
-                return { ...row, total };
-            });
+
+            // 🚨 Date and Data validation check for the current calendar year
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            const isDec31 = today.getMonth() === 11 && today.getDate() === 31;
+            const hasCurrentYearEndData = (valuations ?? []).some((v) =>
+                v.valuation_date.startsWith(`${currentYear}-12-31`)
+            );
+
+            // Filter out the current year row if it is not Dec 31st or if data for Dec 31st doesn't exist
+            const chartDataWithTotals = result.chartData
+                .filter((row) => {
+                    const rowLabel = String(row.label);
+                    const rowYear = Number.parseInt(rowLabel.slice(-4), 10);
+
+                    if (rowYear === currentYear) {
+                        return isDec31 && hasCurrentYearEndData;
+                    }
+                    return true;
+                })
+                .map((row) => {
+                    const total = result.typeNames.reduce((sum, typeName) => {
+                        const val = row[typeName];
+                        return sum + (typeof val === "number" ? val : 0);
+                    }, 0);
+                    return { ...row, total };
+                });
+
             setChartData(chartDataWithTotals);
             setTypeNames(result.typeNames);
         } catch (error: unknown) {
