@@ -117,9 +117,9 @@ export default function YearEndAllocationChart() {
         <Card className="shadow-sm">
             <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <CardTitle className="text-base">Year-end allocation by asset type</CardTitle>
+                    <CardTitle className="text-base">Year-end allocation by asset category</CardTitle>
                     <CardDescription>
-                        Total portfolio value per asset type on 31 December each year, using the latest
+                        Total portfolio value per asset category on 31 December each year, using the latest
                         valuation on or before that date for every asset.
                     </CardDescription>
                 </div>

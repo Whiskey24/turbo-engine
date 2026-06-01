@@ -177,7 +177,7 @@ export default function ChartsHistoryPage() {
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Historical Timelines</h1>
                 <p className="text-sm text-muted-foreground">
-                    Compounded timeline valuation growth trend maps over time.
+                    Compounded timeline of valuation over time.
                 </p>
             </div>
 

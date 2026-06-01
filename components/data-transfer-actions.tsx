@@ -14,16 +14,22 @@ import {
 
 type ImportKind = "asset_types" | "assets" | "transactions";
 
+// ---------------------------------------------------------------------------
+// Import option descriptors
+//
+// asset_types: type_slug removed — it is no longer stored on the type
+// assets:      type_slug added  — each asset now carries its own classification
+// ---------------------------------------------------------------------------
 const importOptions: { kind: ImportKind; label: string; description: string }[] = [
     {
         kind: "asset_types",
         label: "Asset types",
-        description: "name, requires_iban, requires_ticker, requires_isin",
+        description: "name",
     },
     {
         kind: "assets",
         label: "Assets",
-        description: "type_name, name, institution, login_url, comments, iban, ticker, isin",
+        description: "type_name, type_slug, name, institution, login_url, comments, iban, ticker, isin",
     },
     {
         kind: "transactions",

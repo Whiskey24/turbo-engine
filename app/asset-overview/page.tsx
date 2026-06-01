@@ -58,7 +58,7 @@ export default function DashboardAnalyticsPage() {
 
             const { data: assets, error: assetErr } = await supabase
                 .from("portfolio_assets")
-                .select("id, name, institution, iban, ticker, isin, asset_types(name, type_slug)");
+                .select("id, name, institution, iban, ticker, isin, type_slug, asset_types(name)");
 
             if (assetErr || !assets) throw assetErr;
 
@@ -175,7 +175,7 @@ export default function DashboardAnalyticsPage() {
 
                 <Card className="shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-xs font-medium text-muted-foreground">Active Asset Classes</CardTitle>
+                        <CardTitle className="text-xs font-medium text-muted-foreground">Asset Categories</CardTitle>
                         <Landmark className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
@@ -205,7 +205,7 @@ export default function DashboardAnalyticsPage() {
                 {/* INTERACTIVE GRAPH INTERFACE */}
                 <Card className="lg:col-span-2 shadow-sm">
                     <CardHeader>
-                        <CardTitle className="text-base">Asset Type Allocation</CardTitle>
+                        <CardTitle className="text-base">Asset Category Allocation</CardTitle>
                         <CardDescription>Visual breakdown of portfolio exposure weights.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex justify-center items-center p-3">
@@ -286,8 +286,8 @@ export default function DashboardAnalyticsPage() {
             {assetTableRows.length > 0 && (
                 <Card className="shadow-sm">
                     <CardHeader>
-                        <CardTitle className="text-base">Asset Valuations by Type</CardTitle>
-                        <CardDescription>Latest valuation breakdown with assets as rows and types as columns.</CardDescription>
+                        <CardTitle className="text-base">Asset Valuations by Category</CardTitle>
+                        <CardDescription>Latest valuation breakdown with assets as rows and categories as columns.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="overflow-x-auto overflow-y-auto max-h-[600px]">

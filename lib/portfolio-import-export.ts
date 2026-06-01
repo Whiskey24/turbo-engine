@@ -7,11 +7,20 @@ import type {
     ExportValuationRow,
     PortfolioAssetInsert,
 } from "@/lib/database";
+import { ASSET_TYPE_SLUGS } from "@/lib/database";
 import { downloadTextFile, normalizeImportKey, parseTsv, toTsv } from "@/lib/portfolio-tsv";
 
-const ASSET_TYPE_COLUMNS = ["name", "type_slug"] as const;
+// ---------------------------------------------------------------------------
+// Column definitions
+//
+// type_slug removed from asset types — it is no longer stored on the type.
+// type_slug added to assets       — each asset now carries its own classification.
+// ---------------------------------------------------------------------------
+const ASSET_TYPE_COLUMNS = ["name"] as const;
+
 const ASSET_COLUMNS = [
     "type_name",
+    "type_slug",
     "name",
     "institution",
     "login_url",
@@ -20,19 +29,11 @@ const ASSET_COLUMNS = [
     "ticker",
     "isin",
 ] as const;
+
 const TRANSACTION_COLUMNS = ["asset_name", "institution", "valuation_date", "balance_amount"] as const;
 
-const VALID_TYPE_SLUGS = [
-    "BANK_ACCOUNT",
-    "STOCK",
-    "CRYPTO",
-    "FUND_ETF",
-    "REAL_ESTATE",
-    "OTHER",
-] as const;
-
 function isValidSlug(value: string): boolean {
-    return (VALID_TYPE_SLUGS as readonly string[]).includes(value);
+    return (ASSET_TYPE_SLUGS as readonly string[]).includes(value);
 }
 
 type ImportSuccess = { ok: true; imported: number; skipped: number };
@@ -48,6 +49,10 @@ function transactionKey(assetId: string, valuationDate: string): string {
     return `${assetId}|${valuationDate.trim()}`;
 }
 
+// ---------------------------------------------------------------------------
+// Export
+// ---------------------------------------------------------------------------
+
 export async function exportPortfolioData(): Promise<{ ok: true } | { ok: false; message: string }> {
     const userId = await getCurrentUserId();
     if (!userId) {
@@ -59,14 +64,16 @@ export async function exportPortfolioData(): Promise<{ ok: true } | { ok: false;
         { data: assets, error: assetsError },
         { data: valuations, error: valuationsError },
     ] = await Promise.all([
+        // type_slug no longer on asset_types — select name only
         supabase
             .from("asset_types")
-            .select("name, type_slug")
+            .select("name")
             .eq("user_id", userId)
             .order("name"),
+        // type_slug is now a direct column on portfolio_assets; asset_types join fetches display name only
         supabase
             .from("portfolio_assets")
-            .select("name, institution, login_url, comments, iban, ticker, isin, asset_types(name, type_slug)")
+            .select("name, institution, login_url, comments, iban, ticker, isin, type_slug, asset_types(name)")
             .eq("user_id", userId)
             .order("name"),
         supabase
@@ -87,13 +94,15 @@ export async function exportPortfolioData(): Promise<{ ok: true } | { ok: false;
         };
     }
 
+    // Asset types: name only — slug is no longer stored here
     const typeRows = (assetTypes ?? []).map((row: ExportAssetTypeRow) => ({
         name: row.name,
-        type_slug: row.type_slug ?? "",
     }));
 
+    // Assets: include type_slug from the asset row itself
     const assetRows = (assets ?? []).map((row: ExportAssetRow) => ({
         type_name: row.asset_types?.name ?? "",
+        type_slug: row.type_slug ?? "",
         name: row.name,
         institution: row.institution,
         login_url: row.login_url ?? "",
@@ -120,6 +129,13 @@ export async function exportPortfolioData(): Promise<{ ok: true } | { ok: false;
 
     return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// Import: asset types
+//
+// type_slug column is intentionally ignored if present in the file — it is no
+// longer a property of an asset type. Only the name is imported.
+// ---------------------------------------------------------------------------
 
 export async function importAssetTypesFromTsv(content: string): Promise<ImportResult> {
     const userId = await getCurrentUserId();
@@ -157,19 +173,11 @@ export async function importAssetTypesFromTsv(content: string): Promise<ImportRe
             continue;
         }
 
-        const slug = row.type_slug?.trim() || null;
-        if (slug && !isValidSlug(slug)) {
-            return {
-                ok: false,
-                message: `Invalid type_slug "${slug}" for asset type "${row.name.trim()}". Must be one of: ${VALID_TYPE_SLUGS.join(", ")}.`,
-            };
-        }
-
         seenNames.add(nameKey);
         payload.push({
             user_id: userId,
             name: row.name.trim(),
-            type_slug: slug,
+            // type_slug intentionally omitted — no longer part of asset_types
         });
     }
 
@@ -187,6 +195,13 @@ export async function importAssetTypesFromTsv(content: string): Promise<ImportRe
 
     return { ok: true, imported: payload.length, skipped };
 }
+
+// ---------------------------------------------------------------------------
+// Import: assets
+//
+// type_slug is now a required column in the TSV and is validated against the
+// allowed slug list before insertion.
+// ---------------------------------------------------------------------------
 
 export async function importAssetsFromTsv(content: string): Promise<ImportResult> {
     const userId = await getCurrentUserId();
@@ -242,10 +257,26 @@ export async function importAssetsFromTsv(content: string): Promise<ImportResult
             return { ok: false, message: `Unknown asset type "${row.type_name}" for asset "${row.name}".` };
         }
 
+        // type_slug is required on assets — validate it
+        const slug = row.type_slug?.trim() ?? "";
+        if (!slug) {
+            return {
+                ok: false,
+                message: `Missing type_slug for asset "${row.name.trim()}". Must be one of: ${ASSET_TYPE_SLUGS.join(", ")}.`,
+            };
+        }
+        if (!isValidSlug(slug)) {
+            return {
+                ok: false,
+                message: `Invalid type_slug "${slug}" for asset "${row.name.trim()}". Must be one of: ${ASSET_TYPE_SLUGS.join(", ")}.`,
+            };
+        }
+
         seenNames.add(nameKey);
         payload.push({
             user_id: userId,
             type_id: typeId,
+            type_slug: slug,
             name: row.name.trim(),
             institution: row.institution.trim(),
             login_url: row.login_url || null,
@@ -270,6 +301,10 @@ export async function importAssetsFromTsv(content: string): Promise<ImportResult
 
     return { ok: true, imported: payload.length, skipped };
 }
+
+// ---------------------------------------------------------------------------
+// Import: transactions (unchanged — no slug involvement)
+// ---------------------------------------------------------------------------
 
 export async function importTransactionsFromTsv(content: string): Promise<ImportResult> {
     const userId = await getCurrentUserId();

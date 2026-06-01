@@ -6,20 +6,15 @@ import { Trash2, Pencil, X, LayoutGrid, Table, ArrowUp, ArrowDown, ChevronsUpDow
 
 import { supabase } from "@/lib/supabase";
 import type { AssetType, PortfolioAssetWithType } from "@/lib/database";
-import { getUserSettings } from "@/lib/database";
+import { ASSET_TYPE_SLUGS, getUserSettings } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 import { formatIBAN } from "@/lib/utils";
 
-const VALID_TYPE_SLUGS = [
-    "BANK_ACCOUNT",
-    "STOCK",
-    "CRYPTO",
-    "FUND_ETF",
-    "REAL_ESTATE",
-    "OTHER",
-] as const;
+// ---------------------------------------------------------------------------
+// Slug helpers — slug now belongs to portfolio_assets, not asset_types
+// ---------------------------------------------------------------------------
 
-const ASSET_TYPE_LABELS: Record<typeof VALID_TYPE_SLUGS[number], string> = {
+const ASSET_TYPE_LABELS: Record<typeof ASSET_TYPE_SLUGS[number], string> = {
     BANK_ACCOUNT: "Bank Account",
     STOCK: "Individual Stocks",
     CRYPTO: "Cryptocurrency",
@@ -41,7 +36,7 @@ function getSlugRequirements(slug: string): SlugRequirements {
         case "BANK_ACCOUNT":
             return { requires_iban: true, shows_ticker: false, requires_ticker: false, shows_isin: false, requires_isin: false };
         case "STOCK":
-            return { requires_iban: false, shows_ticker: true, requires_ticker: false, shows_isin: true, requires_isin: false };
+            return { requires_iban: false, shows_ticker: true, requires_ticker: false, shows_isin: false, requires_isin: false };
         case "CRYPTO":
             return { requires_iban: false, shows_ticker: true, requires_ticker: true, shows_isin: false, requires_isin: false };
         case "FUND_ETF":
@@ -53,10 +48,6 @@ function getSlugRequirements(slug: string): SlugRequirements {
         default:
             return { requires_iban: false, shows_ticker: false, requires_ticker: false, shows_isin: false, requires_isin: false };
     }
-}
-
-function requiresForType(type: Pick<AssetType, "type_slug"> | undefined): SlugRequirements {
-    return getSlugRequirements(type?.type_slug ?? "");
 }
 
 const formatDate = (dateStr: string, locale: string) => {
@@ -89,11 +80,12 @@ export default function AssetConfigurationPage() {
     const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
-    // Form States
+    // Create Asset Type form state
     const [newTypeName, setNewTypeName] = useState("");
-    const [typeSlug, setTypeSlug] = useState<string>("");
 
+    // Create Asset form state
     const [selectedTypeId, setSelectedTypeId] = useState("");
+    const [assetSlug, setAssetSlug] = useState<string>("");  // slug is now per-asset
     const [assetName, setAssetName] = useState("");
     const [institution, setInstitution] = useState("");
     const [loginUrl, setLoginUrl] = useState("");
@@ -111,12 +103,12 @@ export default function AssetConfigurationPage() {
     // Edit Asset Type Dialog State
     const [editingType, setEditingType] = useState<AssetType | null>(null);
     const [editTypeName, setEditTypeName] = useState("");
-    const [editTypeSlug, setEditTypeSlug] = useState<string>("");
     const [loadingEditType, setLoadingEditType] = useState(false);
 
     // Edit Asset Dialog State
     const [editingAsset, setEditingAsset] = useState<PortfolioAssetWithType | null>(null);
     const [editTypeId, setEditTypeId] = useState("");
+    const [editAssetSlug, setEditAssetSlug] = useState<string>("");  // slug is now per-asset
     const [editName, setEditName] = useState("");
     const [editInstitution, setEditInstitution] = useState("");
     const [editLoginUrl, setEditLoginUrl] = useState("");
@@ -126,18 +118,16 @@ export default function AssetConfigurationPage() {
     const [editIsin, setEditIsin] = useState("");
     const [loadingEdit, setLoadingEdit] = useState(false);
 
-    const currentActiveRuleSet = types.find(t => t.id === selectedTypeId);
-    const editRuleSet = types.find(t => t.id === editTypeId);
-
     const fetchData = useCallback(async () => {
         const { data: fetchTypes } = await supabase
             .from("asset_types")
             .select("*")
             .order("name", { ascending: true });
 
+        // type_slug is now a direct column on portfolio_assets — no longer joined from asset_types
         const { data: fetchAssets } = await supabase
             .from("portfolio_assets")
-            .select("*, asset_types(name, type_slug)")
+            .select("*, asset_types(name)")
             .order("name", { ascending: true });
 
         const { data: fetchValuations } = await supabase
@@ -181,25 +171,21 @@ export default function AssetConfigurationPage() {
         getUserSettings().then((prefs) => { if (prefs.locale) setLocale(prefs.locale); });
     }, []);
 
+    // ---------------------------------------------------------------------------
+    // Asset Type CRUD — slug no longer stored on type
+    // ---------------------------------------------------------------------------
+
     const handleCreateType = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!typeSlug) {
-            alert("Please select an asset type slug.");
-            return;
-        }
         setLoadingType(true);
 
         const { error } = await supabase.from("asset_types").insert([
-            {
-                name: newTypeName,
-                type_slug: typeSlug,
-            },
+            { name: newTypeName },
         ]);
 
         setLoadingType(false);
         if (!error) {
             setNewTypeName("");
-            setTypeSlug("");
             fetchData();
         } else {
             alert(`Error creating type: ${error.message}`);
@@ -209,7 +195,6 @@ export default function AssetConfigurationPage() {
     const openEditTypeDialog = (type: AssetType) => {
         setEditingType(type);
         setEditTypeName(type.name);
-        setEditTypeSlug(type.type_slug || "");
     };
 
     const closeEditTypeDialog = () => {
@@ -220,18 +205,11 @@ export default function AssetConfigurationPage() {
     const handleUpdateType = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingType) return;
-        if (!editTypeSlug) {
-            alert("Please select an asset type slug.");
-            return;
-        }
         setLoadingEditType(true);
 
         const { error } = await supabase
             .from("asset_types")
-            .update({
-                name: editTypeName,
-                type_slug: editTypeSlug,
-            })
+            .update({ name: editTypeName })
             .eq("id", editingType.id);
 
         setLoadingEditType(false);
@@ -239,40 +217,7 @@ export default function AssetConfigurationPage() {
             setEditingType(null);
             fetchData();
         } else {
-            alert(`Error updating type classification: ${error.message}`);
-        }
-    };
-
-    const handleCreateAsset = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoadingAsset(true);
-        const reqs = requiresForType(currentActiveRuleSet);
-
-        const { error } = await supabase.from("portfolio_assets").insert([
-            {
-                type_id: selectedTypeId,
-                name: assetName,
-                institution,
-                login_url: loginUrl || null,
-                comments: comments || null,
-                iban: reqs.requires_iban ? iban : null,
-                ticker: reqs.shows_ticker ? (ticker.toUpperCase() || null) : null,
-                isin: reqs.shows_isin ? (isin.toUpperCase() || null) : null,
-            },
-        ]);
-
-        setLoadingAsset(false)
-        if (!error) {
-            setAssetName("");
-            setInstitution("");
-            setLoginUrl("");
-            setComments("");
-            setIban("");
-            setTicker("");
-            setIsin("");
-            fetchData();
-        } else {
-            alert(`Error registering asset: ${error.message}`);
+            alert(`Error updating type: ${error.message}`);
         }
     };
 
@@ -292,9 +237,53 @@ export default function AssetConfigurationPage() {
         }
     };
 
+    // ---------------------------------------------------------------------------
+    // Asset CRUD — slug is now a first-class field on the asset
+    // ---------------------------------------------------------------------------
+
+    const handleCreateAsset = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!assetSlug) {
+            alert("Please select an asset classification.");
+            return;
+        }
+        setLoadingAsset(true);
+        const reqs = getSlugRequirements(assetSlug);
+
+        const { error } = await supabase.from("portfolio_assets").insert([
+            {
+                type_id: selectedTypeId,
+                type_slug: assetSlug,
+                name: assetName,
+                institution,
+                login_url: loginUrl || null,
+                comments: comments || null,
+                iban: reqs.requires_iban ? iban : null,
+                ticker: reqs.shows_ticker ? (ticker.toUpperCase() || null) : null,
+                isin: reqs.shows_isin ? (isin.toUpperCase() || null) : null,
+            },
+        ]);
+
+        setLoadingAsset(false);
+        if (!error) {
+            setAssetName("");
+            setInstitution("");
+            setLoginUrl("");
+            setComments("");
+            setIban("");
+            setTicker("");
+            setIsin("");
+            setAssetSlug("");
+            fetchData();
+        } else {
+            alert(`Error registering asset: ${error.message}`);
+        }
+    };
+
     const openEditDialog = (asset: PortfolioAssetWithType) => {
         setEditingAsset(asset);
         setEditTypeId(asset.type_id);
+        setEditAssetSlug(asset.type_slug || "");  // load asset's own slug
         setEditName(asset.name);
         setEditInstitution(asset.institution);
         setEditLoginUrl(asset.login_url || "");
@@ -312,14 +301,18 @@ export default function AssetConfigurationPage() {
     const handleUpdateAsset = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingAsset) return;
-
+        if (!editAssetSlug) {
+            alert("Please select an asset classification.");
+            return;
+        }
         setLoadingEdit(true);
-        const reqs = requiresForType(editRuleSet);
+        const reqs = getSlugRequirements(editAssetSlug);
 
         const { error } = await supabase
             .from("portfolio_assets")
             .update({
                 type_id: editTypeId,
+                type_slug: editAssetSlug,
                 name: editName,
                 institution: editInstitution,
                 login_url: editLoginUrl || null,
@@ -355,7 +348,10 @@ export default function AssetConfigurationPage() {
         }
     };
 
-    // Table Column Sorting Handler
+    // ---------------------------------------------------------------------------
+    // Table Column Sorting
+    // ---------------------------------------------------------------------------
+
     const handleSort = (field: SortField) => {
         setSortConfig((current) => {
             if (!current || current.field !== field) {
@@ -364,7 +360,7 @@ export default function AssetConfigurationPage() {
             if (current.direction === "asc") {
                 return { field, direction: "desc" };
             }
-            return null; // Reset sort state on 3rd click cycle
+            return null;
         });
     };
 
@@ -379,7 +375,6 @@ export default function AssetConfigurationPage() {
         );
     };
 
-    // Compute active runtime client sorted assets collection
     const sortedAssets = [...assets].sort((a, b) => {
         if (!sortConfig) return 0;
         const { field, direction } = sortConfig;
@@ -405,8 +400,9 @@ export default function AssetConfigurationPage() {
         return 0;
     });
 
-    const createReqs = requiresForType(currentActiveRuleSet);
-    const editReqs = requiresForType(editRuleSet);
+    // Requirements derived from the selected slug on the asset (not the type)
+    const createReqs = getSlugRequirements(assetSlug);
+    const editReqs = getSlugRequirements(editAssetSlug);
 
     const allSelected = types.length > 0 && selectedTypes.size === types.length;
 
@@ -424,119 +420,123 @@ export default function AssetConfigurationPage() {
 
     const filteredAssets = sortedAssets.filter((a) => selectedTypes.has(a.type_id));
 
+    // Reusable slug selector used in both create and edit asset forms
+    const SlugSelector = ({
+        value,
+        onChange,
+        required,
+    }: {
+        value: string;
+        onChange: (v: string) => void;
+        required?: boolean;
+    }) => (
+        <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Asset classification</label>
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
+                required={required}
+            >
+                <option value="" disabled>-- Select a classification --</option>
+                {ASSET_TYPE_SLUGS.map((slug) => (
+                    <option key={slug} value={slug}>
+                        {ASSET_TYPE_LABELS[slug]}
+                    </option>
+                ))}
+            </select>
+        </div>
+    );
+
+    // Reusable required-data preview shown below the slug selector
+    const SlugRequirementsPreview = ({ reqs }: { reqs: SlugRequirements }) => {
+        const hasAny = reqs.requires_iban || reqs.requires_ticker || reqs.requires_isin;
+        if (!hasAny) {
+            return <p className="text-xs text-muted-foreground italic">None — no additional parameters required.</p>;
+        }
+        return (
+            <div className="grid grid-cols-1 gap-2">
+                {reqs.requires_iban && (
+                    <div className="flex items-center gap-2.5 text-sm font-normal">
+                        <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
+                        <span>Requires IBAN</span>
+                    </div>
+                )}
+                {reqs.shows_ticker && (
+                    <div className="flex items-center gap-2.5 text-sm font-normal">
+                        <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
+                        <span>Ticker {reqs.requires_ticker ? "(required)" : "(optional)"}</span>
+                    </div>
+                )}
+                {reqs.shows_isin && (
+                    <div className="flex items-center gap-2.5 text-sm font-normal">
+                        <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
+                        <span>ISIN {reqs.requires_isin ? "(required)" : "(optional)"}</span>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     return (
         <div className="space-y-8">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Asset Configuration</h1>
-                <p className="text-sm text-muted-foreground">Maintain asset types and assets.</p>
+                <p className="text-sm text-muted-foreground">Maintain asset categories and assets.</p>
             </div>
 
-            {/* BLOCK 1: ASSET TYPE ENGINE PANELS */}
+            {/* BLOCK 1: ASSET CATEGORY ENGINE PANELS */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
-                {/* COLUMN 1: MAINTAIN ASSET TYPES */}
-                <Card className="shadow-sm lg:col-span-1 min-h-[419px] max-h-[419px] flex flex-col justify-between">
+                {/* COLUMN 1: MAINTAIN ASSET CATEGORIES */}
+                <Card className="shadow-sm lg:col-span-1 min-h-[332px] max-h-[419px] flex flex-col justify-between">
                     <div>
                         <CardHeader>
-                            <CardTitle className="text-base">Create Asset Types</CardTitle>
-                            <CardDescription>Define asset types to group your assets.</CardDescription>
+                            <CardTitle className="text-base">Create Asset Category</CardTitle>
+                            <CardDescription>Define asset categories to group your assets.</CardDescription>
                         </CardHeader>
                         <CardContent>
+                            {/* Asset categories no longer carry a slug — only a name */}
                             <form onSubmit={handleCreateType} className="space-y-4">
                                 <div className="space-y-4">
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-medium text-muted-foreground">Asset type label</label>
+                                        <label className="text-xs font-medium text-muted-foreground">Asset category label</label>
                                         <input
                                             type="text" value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)}
-                                            placeholder="e.g., Cash, Crypto Tokens" className="border rounded-md p-2 bg-background text-sm" required
+                                            placeholder="e.g., Saving Accounts, Speculative Stock" className="border rounded-md p-2 bg-background text-sm" required
                                         />
-                                    </div>
-
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-medium text-muted-foreground">Asset classification</label>
-                                        <select
-                                            value={typeSlug}
-                                            onChange={(e) => setTypeSlug(e.target.value)}
-                                            className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
-                                            required
-                                        >
-                                            <option value="" disabled>-- Select a classification --</option>
-                                            {VALID_TYPE_SLUGS.map((slug) => (
-                                                <option key={slug} value={slug}>
-                                                    {ASSET_TYPE_LABELS[slug]}
-                                                </option>
-                                            ))}
-                                        </select>
                                     </div>
                                 </div>
 
-                                {typeSlug && (
-                                    <div className="space-y-2 border rounded-md p-3 bg-muted/40">
-                                        <p className="text-xs font-semibold text-muted-foreground mb-1.5">Required Data Parameters:</p>
-                                        {(() => {
-                                            const reqs = getSlugRequirements(typeSlug);
-                                            const hasAny = reqs.requires_iban || reqs.requires_ticker || reqs.requires_isin;
-                                            if (!hasAny) {
-                                                return <p className="text-xs text-muted-foreground italic">None — no additional parameters required.</p>;
-                                            }
-                                            return (
-                                                <div className="grid grid-cols-1 gap-2">
-                                                    {reqs.requires_iban && (
-                                                        <div className="flex items-center gap-2.5 text-sm font-normal">
-                                                            <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
-                                                            <span>Requires IBAN</span>
-                                                        </div>
-                                                    )}
-                                                    {reqs.shows_ticker && (
-                                                        <div className="flex items-center gap-2.5 text-sm font-normal">
-                                                            <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
-                                                            <span>Ticker {reqs.requires_ticker ? "(required)" : "(optional)"}</span>
-                                                        </div>
-                                                    )}
-                                                    {reqs.shows_isin && (
-                                                        <div className="flex items-center gap-2.5 text-sm font-normal">
-                                                            <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
-                                                            <span>ISIN {reqs.requires_isin ? "(required)" : "(optional)"}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })()}
-                                    </div>
-                                )}
-
                                 <button type="submit" disabled={loadingType} className="w-full bg-secondary text-secondary-foreground font-medium py-2 rounded-md transition hover:opacity-90 text-sm mt-2 cursor-pointer disabled:cursor-not-allowed">
-                                    {loadingType ? "Processing..." : "Create Asset Type"}
+                                    {loadingType ? "Processing..." : "Create Asset Category"}
                                 </button>
                             </form>
                         </CardContent>
                     </div>
                 </Card>
 
-                {/* COLUMNS 2 & 3: DEFINED ASSET TYPES */}
+                {/* COLUMNS 2 & 3: DEFINED ASSET CATEGORIES */}
                 <div className="space-y-2 h-full lg:col-span-2">
                     {types.length === 0 ? (
                         <div className="bg-card border border-dashed rounded-md p-6 text-muted-foreground text-center text-sm min-h-[419px] flex items-center justify-center">
-                            No asset types registered.
+                            No asset categories registered.
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[419px] max-h-[419px] overflow-y-auto pr-1 content-start">
                             {types.map(t => {
-                                const tReqs = requiresForType(t);
+                                // Count the number of active assets belonging to this type profile
+                                const assetCount = assets.filter(a => a.type_id === t.id).length;
+
                                 return (
-                                    <div key={t.id} className="bg-card border rounded-md p-3 relative group shadow-sm h-[71px]">
+                                    <div key={t.id} className="bg-card border rounded-md p-3 relative group shadow-sm h-[71px] flex flex-col justify-center">
                                         <div className="flex flex-col gap-0.5 pr-8">
-                                            <span className="font-semibold text-foreground text-xs truncate" title={t.name}>{t.name}</span>
-                                            <span className="text-[10px] font-medium text-muted-foreground">
-                                                {t.type_slug && t.type_slug in ASSET_TYPE_LABELS
-                                                    ? ASSET_TYPE_LABELS[t.type_slug as keyof typeof ASSET_TYPE_LABELS]
-                                                    : (t.type_slug ?? "Unclassified")}
+                                            <span className="font-semibold text-foreground text-xs truncate" title={t.name}>
+                                                {t.name}
                                             </span>
-                                            <div className="flex gap-1 text-[9px] font-mono text-muted-foreground mt-0.5">
-                                                {tReqs.requires_iban && <span>[IBAN]</span>}
-                                                {tReqs.shows_ticker && <span>[TICKER{tReqs.requires_ticker ? "" : "?"}]</span>}
-                                                {tReqs.shows_isin && <span>[ISIN{tReqs.requires_isin ? "" : "?"}]</span>}
-                                            </div>
+                                            <span className="text-[11px] text-muted-foreground font-medium">
+                                                {assetCount} {assetCount === 1 ? "registered asset" : "registered assets"}
+                                            </span>
                                         </div>
                                         <div className="absolute top-2 right-2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition">
                                             <button
@@ -570,17 +570,17 @@ export default function AssetConfigurationPage() {
                 <CardContent>
                     {types.length === 0 ? (
                         <div className="text-center py-6 text-sm text-muted-foreground">
-                            Register at least one asset type above before registering assets.
+                            Register at least one asset category above before registering assets.
                         </div>
                     ) : (
                         <form onSubmit={handleCreateAsset} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-muted-foreground">Account Name</label>
+                                <label className="text-xs font-medium text-muted-foreground">Asset Name</label>
                                 <input type="text" value={assetName} onChange={(e) => setAssetName(e.target.value)} placeholder="e.g., Personal Portfolio Reserve" className="border rounded-md p-2 bg-background text-sm" required />
                             </div>
 
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-muted-foreground">Asset type</label>
+                                <label className="text-xs font-medium text-muted-foreground">Asset category</label>
                                 <select
                                     value={selectedTypeId} onChange={(e) => setSelectedTypeId(e.target.value)}
                                     className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
@@ -588,6 +588,9 @@ export default function AssetConfigurationPage() {
                                     {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                 </select>
                             </div>
+
+                            {/* Asset classification is now set per-asset */}
+                            <SlugSelector value={assetSlug} onChange={setAssetSlug} required />
 
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-xs font-medium text-muted-foreground">Custodian Bank / Broker</label>
@@ -598,6 +601,13 @@ export default function AssetConfigurationPage() {
                                 <label className="text-xs font-medium text-muted-foreground">Login Portal Url (Optional)</label>
                                 <input type="url" value={loginUrl} onChange={(e) => setLoginUrl(e.target.value)} placeholder="https://login.bank.com" className="border rounded-md p-2 bg-background text-sm" />
                             </div>
+
+                            {assetSlug && (
+                                <div className="space-y-2 border rounded-md p-3 bg-muted/40 md:col-span-2">
+                                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Required Data Parameters:</p>
+                                    <SlugRequirementsPreview reqs={createReqs} />
+                                </div>
+                            )}
 
                             {createReqs.requires_iban && (
                                 <div className="flex flex-col gap-1.5 md:col-span-2">
@@ -690,8 +700,8 @@ export default function AssetConfigurationPage() {
                                 key={type.id}
                                 onClick={() => toggleType(type.id)}
                                 className={`text-xs px-2.5 py-1 rounded-full border font-medium transition cursor-pointer ${selectedTypes.has(type.id)
-                                        ? "bg-primary text-primary-foreground border-primary"
-                                        : "bg-muted/40 text-muted-foreground/50 border-border/50 hover:text-muted-foreground"
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-muted/40 text-muted-foreground/50 border-border/50 hover:text-muted-foreground"
                                     }`}
                             >
                                 {type.name}
@@ -709,7 +719,7 @@ export default function AssetConfigurationPage() {
                         No assets match the selected filters.
                     </div>
                 ) : viewMode === "cards" ? (
-                    /* ORIGINAL CARDS VIEW MODE */
+                    /* CARDS VIEW */
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredAssets.map((asset) => (
                             <Card key={asset.id} className="shadow-sm relative group">
@@ -719,9 +729,16 @@ export default function AssetConfigurationPage() {
                                             <CardTitle className="text-sm font-bold">{asset.name}</CardTitle>
                                             <CardDescription className="text-xs">{asset.institution}</CardDescription>
                                         </div>
-                                        <span className="text-[10px] font-bold bg-secondary text-secondary-foreground px-2 py-0.5 rounded tracking-wider">
-                                            {asset.asset_types?.name || "Asset"}
-                                        </span>
+                                        <div className="flex flex-col items-end gap-0.5">
+                                            <span className="text-[10px] font-bold bg-secondary text-secondary-foreground px-2 py-0.5 rounded tracking-wider">
+                                                {asset.asset_types?.name || "Asset"}
+                                            </span>
+                                            {asset.type_slug && asset.type_slug in ASSET_TYPE_LABELS && (
+                                                <span className="text-[9px] text-muted-foreground font-medium">
+                                                    {ASSET_TYPE_LABELS[asset.type_slug as keyof typeof ASSET_TYPE_LABELS]}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="absolute top-4 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition">
                                         <button
@@ -747,7 +764,8 @@ export default function AssetConfigurationPage() {
                                     {latestValuations[asset.id] ? (
                                         <div className="flex justify-between items-center border-t pt-1.5 mt-1.5 text-foreground">
                                             <span>Last Valuation: <strong className="font-medium">{formatDate(latestValuations[asset.id].valuation_date, locale)}</strong></span>
-                                            <span className="font-bold text-primary">{formatCurrency(latestValuations[asset.id].balance_amount, locale)}</span>                                        </div>
+                                            <span className="font-bold text-primary">{formatCurrency(latestValuations[asset.id].balance_amount, locale)}</span>
+                                        </div>
                                     ) : (
                                         <p className="italic border-t pt-1.5 mt-1.5">No valuation logged yet.</p>
                                     )}
@@ -757,7 +775,7 @@ export default function AssetConfigurationPage() {
                         ))}
                     </div>
                 ) : (
-                    /* SPREADSHEET TABLE VIEW MODE (WITH INTERACTIVE SORTING HEADERS) */
+                    /* SPREADSHEET TABLE VIEW */
                     <div className="border rounded-md bg-card shadow-sm overflow-x-auto">
                         <table className="w-full text-left border-collapse text-xs">
                             <thead>
@@ -785,7 +803,7 @@ export default function AssetConfigurationPage() {
                                         className="p-3 cursor-pointer hover:bg-muted/80 hover:text-foreground group transition w-1/5"
                                     >
                                         <div className="flex items-center">
-                                            <span>Asset Type</span>
+                                            <span>Asset Category</span>
                                             {renderSortIcon("type")}
                                         </div>
                                     </th>
@@ -819,9 +837,16 @@ export default function AssetConfigurationPage() {
                                             </td>
                                             <td className="p-3 text-muted-foreground">{asset.institution}</td>
                                             <td className="p-3">
-                                                <span className="text-[10px] font-medium bg-secondary text-secondary-foreground px-2 py-0.5 rounded">
-                                                    {asset.asset_types?.name || "Asset"}
-                                                </span>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[10px] font-medium bg-secondary text-secondary-foreground px-2 py-0.5 rounded w-fit">
+                                                        {asset.asset_types?.name || "Asset"}
+                                                    </span>
+                                                    {asset.type_slug && asset.type_slug in ASSET_TYPE_LABELS && (
+                                                        <span className="text-[9px] text-muted-foreground pl-0.5">
+                                                            {ASSET_TYPE_LABELS[asset.type_slug as keyof typeof ASSET_TYPE_LABELS]}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="p-3 font-mono text-[11px] text-muted-foreground space-y-0.5">
                                                 {asset.iban && <div><span className="text-[9px] font-sans font-medium text-foreground/70 mr-1">[IBAN]</span>{formatIBAN(asset.iban)}</div>}
@@ -833,7 +858,8 @@ export default function AssetConfigurationPage() {
                                                 {valuation ? (
                                                     <div className="flex flex-col">
                                                         <span className="font-bold text-primary">{formatCurrency(valuation.balance_amount, locale)}</span>
-                                                        <span className="text-[10px] text-muted-foreground">{formatDate(valuation.valuation_date, locale)}</span>                                                    </div>
+                                                        <span className="text-[10px] text-muted-foreground">{formatDate(valuation.valuation_date, locale)}</span>
+                                                    </div>
                                                 ) : (
                                                     <span className="italic text-muted-foreground/60">No records</span>
                                                 )}
@@ -880,7 +906,6 @@ export default function AssetConfigurationPage() {
                                 <h3 id="edit-type-title" className="text-base font-semibold text-foreground">
                                     Edit Asset Type
                                 </h3>
-
                             </div>
                             <button
                                 type="button"
@@ -893,6 +918,7 @@ export default function AssetConfigurationPage() {
                             </button>
                         </div>
 
+                        {/* Edit type form: name only — slug is now on each asset */}
                         <form onSubmit={handleUpdateType} className="space-y-4">
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-xs font-medium text-muted-foreground">Asset type label</label>
@@ -901,62 +927,6 @@ export default function AssetConfigurationPage() {
                                     className="border rounded-md p-2 bg-background text-sm" required
                                 />
                             </div>
-
-                            <div className="flex flex-col gap-1.5">
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    Remember to update all the assets of this asset type when changing this classification!
-                                </p>
-                                <label className="text-xs font-medium text-muted-foreground">Asset classification</label>
-
-                                <select
-                                    value={editTypeSlug}
-                                    onChange={(e) => setEditTypeSlug(e.target.value)}
-                                    className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
-                                    required
-                                >
-                                    <option value="" disabled>-- Select a classification --</option>
-                                    {VALID_TYPE_SLUGS.map((slug) => (
-                                        <option key={slug} value={slug}>
-                                            {ASSET_TYPE_LABELS[slug]}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {editTypeSlug && (
-                                <div className="space-y-2 border rounded-md p-3 bg-muted/40">
-                                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Required Data Parameters:</p>
-                                    {(() => {
-                                        const reqs = getSlugRequirements(editTypeSlug);
-                                        const hasAny = reqs.requires_iban || reqs.requires_ticker || reqs.requires_isin;
-                                        if (!hasAny) {
-                                            return <p className="text-xs text-muted-foreground italic">None — no additional parameters required.</p>;
-                                        }
-                                        return (
-                                            <div className="grid grid-cols-1 gap-2">
-                                                {reqs.requires_iban && (
-                                                    <div className="flex items-center gap-2.5 text-sm font-normal">
-                                                        <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
-                                                        <span>Requires IBAN</span>
-                                                    </div>
-                                                )}
-                                                {reqs.requires_ticker && (
-                                                    <div className="flex items-center gap-2.5 text-sm font-normal">
-                                                        <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
-                                                        <span>Requires Ticker</span>
-                                                    </div>
-                                                )}
-                                                {reqs.requires_isin && (
-                                                    <div className="flex items-center gap-2.5 text-sm font-normal">
-                                                        <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" />
-                                                        <span>Requires ISIN</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            )}
 
                             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-2">
                                 <button
@@ -1026,6 +996,9 @@ export default function AssetConfigurationPage() {
                                 <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="border rounded-md p-2 bg-background text-sm" required />
                             </div>
 
+                            {/* Asset classification is now edited per-asset */}
+                            <SlugSelector value={editAssetSlug} onChange={setEditAssetSlug} required />
+
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-xs font-medium text-muted-foreground">Custodian Bank / Broker</label>
                                 <input type="text" value={editInstitution} onChange={(e) => setEditInstitution(e.target.value)} className="border rounded-md p-2 bg-background text-sm" required />
@@ -1035,6 +1008,13 @@ export default function AssetConfigurationPage() {
                                 <label className="text-xs font-medium text-muted-foreground">Login Portal Url (Optional)</label>
                                 <input type="url" value={editLoginUrl} onChange={(e) => setEditLoginUrl(e.target.value)} placeholder="https://login.bank.com" className="border rounded-md p-2 bg-background text-sm" />
                             </div>
+
+                            {editAssetSlug && (
+                                <div className="space-y-2 border rounded-md p-3 bg-muted/40 md:col-span-2">
+                                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Required Data Parameters:</p>
+                                    <SlugRequirementsPreview reqs={editReqs} />
+                                </div>
+                            )}
 
                             {editReqs.requires_iban && (
                                 <div className="flex flex-col gap-1.5 md:col-span-2">

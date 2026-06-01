@@ -6,9 +6,18 @@ import { LayoutGrid, Table, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-re
 
 import { supabase } from "@/lib/supabase";
 import type { AssetType, PortfolioAssetWithType } from "@/lib/database";
-import { getUserSettings } from "@/lib/database";
+import { ASSET_TYPE_SLUGS, getUserSettings } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 import { formatIBAN } from "@/lib/utils";
+
+const ASSET_TYPE_LABELS: Record<typeof ASSET_TYPE_SLUGS[number], string> = {
+    BANK_ACCOUNT: "Bank Account",
+    STOCK: "Individual Stocks",
+    CRYPTO: "Cryptocurrency",
+    FUND_ETF: "Mutual Funds & ETFs",
+    REAL_ESTATE: "Real Estate Property",
+    OTHER: "Other Assets / Miscellaneous",
+};
 
 const formatDate = (dateStr: string, locale: string) => {
     if (!dateStr) return "";
@@ -46,9 +55,10 @@ export default function AssetsPage() {
             .select("*")
             .order("name", { ascending: true });
 
+        // type_slug is now a direct column on portfolio_assets — no longer joined from asset_types
         const { data: fetchAssets } = await supabase
             .from("portfolio_assets")
-            .select("*, asset_types(name, type_slug)")
+            .select("*, asset_types(name)")
             .order("name", { ascending: true });
 
         const { data: fetchValuations } = await supabase
@@ -175,8 +185,8 @@ export default function AssetsPage() {
                                         key={type.id}
                                         onClick={() => toggleType(type.id)}
                                         className={`text-xs px-2.5 py-1 rounded-full border font-medium transition cursor-pointer ${selectedTypes.has(type.id)
-                                                ? "bg-primary text-primary-foreground border-primary"
-                                                : "bg-muted/40 text-muted-foreground/50 border-border/50 hover:text-muted-foreground"
+                                            ? "bg-primary text-primary-foreground border-primary"
+                                            : "bg-muted/40 text-muted-foreground/50 border-border/50 hover:text-muted-foreground"
                                             }`}
                                     >
                                         {type.name}
@@ -235,9 +245,17 @@ export default function AssetsPage() {
                                             <CardTitle className="text-sm font-bold">{asset.name}</CardTitle>
                                             <CardDescription className="text-xs">{asset.institution}</CardDescription>
                                         </div>
-                                        <span className="text-[10px] font-bold bg-secondary text-secondary-foreground px-2 py-0.5 rounded tracking-wider shrink-0 ml-2">
-                                            {asset.asset_types?.name || "Asset"}
-                                        </span>
+                                        {/* Type group badge + per-asset classification label */}
+                                        <div className="flex flex-col items-end gap-0.5 shrink-0 ml-2">
+                                            <span className="text-[10px] font-bold bg-secondary text-secondary-foreground px-2 py-0.5 rounded tracking-wider">
+                                                {asset.asset_types?.name || "Asset"}
+                                            </span>
+                                            {asset.type_slug && asset.type_slug in ASSET_TYPE_LABELS && (
+                                                <span className="text-[9px] text-muted-foreground font-medium">
+                                                    {ASSET_TYPE_LABELS[asset.type_slug as keyof typeof ASSET_TYPE_LABELS]}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </CardHeader>
                                 <CardContent className="text-xs space-y-1.5 text-muted-foreground pt-0">
@@ -292,7 +310,7 @@ export default function AssetsPage() {
                                         className="p-3 cursor-pointer hover:bg-muted/80 hover:text-foreground group transition w-1/5"
                                     >
                                         <div className="flex items-center">
-                                            <span>Asset Type</span>
+                                            <span>Asset Category</span>
                                             {renderSortIcon("type")}
                                         </div>
                                     </th>
@@ -325,9 +343,17 @@ export default function AssetsPage() {
                                             </td>
                                             <td className="p-3 text-muted-foreground">{asset.institution}</td>
                                             <td className="p-3">
-                                                <span className="text-[10px] font-medium bg-secondary text-secondary-foreground px-2 py-0.5 rounded">
-                                                    {asset.asset_types?.name || "Asset"}
-                                                </span>
+                                                {/* Type group badge + per-asset classification label */}
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[10px] font-medium bg-secondary text-secondary-foreground px-2 py-0.5 rounded w-fit">
+                                                        {asset.asset_types?.name || "Asset"}
+                                                    </span>
+                                                    {asset.type_slug && asset.type_slug in ASSET_TYPE_LABELS && (
+                                                        <span className="text-[9px] text-muted-foreground pl-0.5">
+                                                            {ASSET_TYPE_LABELS[asset.type_slug as keyof typeof ASSET_TYPE_LABELS]}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="p-3 font-mono text-[11px] text-muted-foreground space-y-0.5">
                                                 {asset.iban && <div><span className="text-[9px] font-sans font-medium text-foreground/70 mr-1">[IBAN]</span>{formatIBAN(asset.iban)}</div>}

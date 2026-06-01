@@ -57,7 +57,8 @@ export default function ValuationLedgerPage() {
             portfolio_assets(
                 name, 
                 institution, 
-                asset_types(name, type_slug)
+                type_slug,
+                asset_types(name)
             )
         `)
             .order("valuation_date", { ascending: false });
@@ -335,7 +336,7 @@ export default function ValuationLedgerPage() {
 
                                         <th className="p-3 align-middle">
                                             <div className="flex items-center gap-2 min-w-[180px]">
-                                                <span>Asset Profile Account</span>
+                                                <span>Asset</span>
                                                 <div className="relative flex items-center group text-foreground">
                                                     <Filter className="absolute left-1.5 h-3 w-3 text-muted-foreground pointer-events-none group-hover:text-primary transition" />
                                                     <select
@@ -343,7 +344,7 @@ export default function ValuationLedgerPage() {
                                                         onChange={(e) => setSelectedFilterAssetId(e.target.value)}
                                                         className="pl-5 pr-2 py-0.5 text-[10px] bg-background border rounded font-normal text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary max-w-[140px] cursor-pointer hover:border-muted-foreground/50 transition appearance-none"
                                                     >
-                                                        <option value="ALL">All Accounts ▾</option>
+                                                        <option value="ALL">All Assets ▾</option>
                                                         {assets.map(a => (
                                                             <option key={a.id} value={a.id}>{a.name}</option>
                                                         ))}
@@ -355,7 +356,7 @@ export default function ValuationLedgerPage() {
                                         {/* NEW ASSET TYPE FILTER COLUMN */}
                                         <th className="p-3 align-middle">
                                             <div className="flex items-center gap-2 min-w-[140px]">
-                                                <span>Asset Type</span>
+                                                <span>Category</span>
                                                 <div className="relative flex items-center group text-foreground">
                                                     <Filter className="absolute left-1.5 h-3 w-3 text-muted-foreground pointer-events-none group-hover:text-primary transition" />
                                                     <select
@@ -363,7 +364,7 @@ export default function ValuationLedgerPage() {
                                                         onChange={(e) => setSelectedFilterType(e.target.value)}
                                                         className="pl-5 pr-2 py-0.5 text-[10px] bg-background border rounded font-normal text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary max-w-[120px] cursor-pointer hover:border-muted-foreground/50 transition appearance-none"
                                                     >
-                                                        <option value="ALL">All Types ▾</option>
+                                                        <option value="ALL">All Categories ▾</option>
                                                         {uniqueAssetTypes.map(type => (
                                                             <option key={type} value={type}>{type}</option>
                                                         ))}
@@ -372,7 +373,7 @@ export default function ValuationLedgerPage() {
                                             </div>
                                         </th>
 
-                                        <th className="p-3 text-right align-middle">Balance Metrics (€)</th>
+                                        <th className="p-3 text-right align-middle">Balance (€)</th>
                                         <th className="p-3 text-center w-12 align-middle">Actions</th>
                                     </tr>
                                 </thead>
