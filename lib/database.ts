@@ -8,37 +8,41 @@ export type { AssetTypeSlug } from "@/lib/database.types";
 
 // ---------------------------------------------------------------------------
 // Base table row / insert types
+//
+// The database table is now called asset_categories.
+// The exported TypeScript names (AssetType, AssetTypeInsert) are kept
+// unchanged so that all downstream consumers continue to compile without
+// modification. Renaming the exports to AssetCategory / AssetCategoryInsert
+// is the next planned step.
 // ---------------------------------------------------------------------------
 
-export type AssetType = Tables<"asset_types">;
+export type AssetType = Tables<"asset_categories">;     // table: asset_categories
 export type PortfolioAsset = Tables<"portfolio_assets">;
 export type AssetValuation = Tables<"asset_valuations">;
 
-export type AssetTypeInsert = TablesInsert<"asset_types">;
+export type AssetTypeInsert = TablesInsert<"asset_categories">;
 export type PortfolioAssetInsert = TablesInsert<"portfolio_assets">;
 export type AssetValuationInsert = TablesInsert<"asset_valuations">;
 
 // ---------------------------------------------------------------------------
 // Derived query types
 //
-// type_slug now lives on portfolio_assets, NOT on asset_types.
-// All joins that previously pulled type_slug from the asset_types relation
-// have been updated accordingly.
+// All .from("asset_types") calls updated to .from("asset_categories").
+// All join sub-selects "asset_types(...)" updated to "asset_categories(...)".
 // ---------------------------------------------------------------------------
 
 /**
- * Full portfolio_assets row + the asset type's display name.
+ * Full portfolio_assets row + the asset category's display name.
  * type_slug is already included via the `*` wildcard on portfolio_assets.
  */
 const portfolioAssetWithTypeQuery = supabase
     .from("portfolio_assets")
-    .select("*, asset_types(name)");
+    .select("*, asset_categories(name)");
 
 export type PortfolioAssetWithType = QueryData<typeof portfolioAssetWithTypeQuery>[number];
 
 /**
- * Lightweight summary used for dropdowns / lists that only need
- * the identity fields.
+ * Lightweight summary used for dropdowns / lists.
  */
 const portfolioAssetSummaryQuery = supabase
     .from("portfolio_assets")
@@ -47,19 +51,16 @@ const portfolioAssetSummaryQuery = supabase
 export type PortfolioAssetSummary = QueryData<typeof portfolioAssetSummaryQuery>[number];
 
 /**
- * Summary that also includes the type name and type_slug for display/filtering.
- * type_slug is selected directly from portfolio_assets; only the human-readable
- * name is fetched from the joined asset_types relation.
+ * Summary with category name and type_slug for display / filtering.
  */
 const portfolioAssetWithTypeNameQuery = supabase
     .from("portfolio_assets")
-    .select("id, name, institution, iban, ticker, isin, type_slug, asset_types(name)");
+    .select("id, name, institution, iban, ticker, isin, type_slug, asset_categories(name)");
 
 export type PortfolioAssetWithTypeName = QueryData<typeof portfolioAssetWithTypeNameQuery>[number];
 
 /**
  * Valuation ledger rows used for history views / charts.
- * type_slug is now part of the portfolio_assets sub-select.
  */
 const valuationLedgerQuery = supabase.from("asset_valuations").select(`
     id,
@@ -70,7 +71,7 @@ const valuationLedgerQuery = supabase.from("asset_valuations").select(`
         name,
         institution,
         type_slug,
-        asset_types(name)
+        asset_categories(name)
     )
 `);
 
@@ -87,23 +88,20 @@ export type ValuationReference = QueryData<typeof valuationReferenceQuery>[numbe
 // ---------------------------------------------------------------------------
 
 /**
- * Asset type export — type_slug has been removed because it no longer exists
- * on asset_types. Only the display name is exported here; the slug travels
- * with each individual asset (see ExportAssetRow below).
+ * Asset category export — only the display name is exported.
  */
 const exportAssetTypeQuery = supabase
-    .from("asset_types")
+    .from("asset_categories")
     .select("name");
 
 export type ExportAssetTypeRow = QueryData<typeof exportAssetTypeQuery>[number];
 
 /**
- * Asset export — type_slug is now a direct column on portfolio_assets so it
- * is selected from there. The asset_types join only contributes the display name.
+ * Asset export — type_slug from portfolio_assets; category name from the join.
  */
 const exportAssetQuery = supabase
     .from("portfolio_assets")
-    .select("name, institution, login_url, comments, iban, ticker, isin, type_slug, asset_types(name)");
+    .select("name, institution, login_url, comments, iban, ticker, isin, type_slug, asset_categories(name)");
 
 export type ExportAssetRow = QueryData<typeof exportAssetQuery>[number];
 
@@ -124,12 +122,12 @@ export async function hasPortfolioData(): Promise<boolean> {
     const userId = session?.user?.id;
     if (!userId) return false;
 
-    const { count: typeCount } = await supabase
-        .from("asset_types")
+    const { count: categoryCount } = await supabase
+        .from("asset_categories")
         .select("*", { count: "exact", head: true })
         .eq("user_id", userId);
 
-    if (typeCount && typeCount > 0) return true;
+    if (categoryCount && categoryCount > 0) return true;
 
     const { count: assetCount } = await supabase
         .from("portfolio_assets")

@@ -66,14 +66,14 @@ export async function exportPortfolioData(): Promise<{ ok: true } | { ok: false;
     ] = await Promise.all([
         // type_slug no longer on asset_types — select name only
         supabase
-            .from("asset_types")
+            .from("asset_categories")
             .select("name")
             .eq("user_id", userId)
             .order("name"),
-        // type_slug is now a direct column on portfolio_assets; asset_types join fetches display name only
+        // type_slug is now a direct column on portfolio_assets; asset_categories join fetches display name only
         supabase
             .from("portfolio_assets")
-            .select("name, institution, login_url, comments, iban, ticker, isin, type_slug, asset_types(name)")
+            .select("name, institution, login_url, comments, iban, ticker, isin, type_slug, asset_categories(name)")
             .eq("user_id", userId)
             .order("name"),
         supabase
@@ -101,7 +101,7 @@ export async function exportPortfolioData(): Promise<{ ok: true } | { ok: false;
 
     // Assets: include type_slug from the asset row itself
     const assetRows = (assets ?? []).map((row: ExportAssetRow) => ({
-        type_name: row.asset_types?.name ?? "",
+        type_name: row.asset_categories?.name ?? "",
         type_slug: row.type_slug ?? "",
         name: row.name,
         institution: row.institution,
@@ -149,7 +149,7 @@ export async function importAssetTypesFromTsv(content: string): Promise<ImportRe
     }
 
     const { data: existingTypes, error: fetchError } = await supabase
-        .from("asset_types")
+        .from("asset_categories")
         .select("name")
         .eq("user_id", userId);
 
@@ -188,7 +188,7 @@ export async function importAssetTypesFromTsv(content: string): Promise<ImportRe
         };
     }
 
-    const { error } = await supabase.from("asset_types").insert(payload);
+    const { error } = await supabase.from("asset_categories").insert(payload);
     if (error) {
         return { ok: false, message: error.message };
     }
@@ -215,7 +215,7 @@ export async function importAssetsFromTsv(content: string): Promise<ImportResult
     }
 
     const { data: types, error: typesError } = await supabase
-        .from("asset_types")
+        .from("asset_categories")
         .select("id, name")
         .eq("user_id", userId);
 

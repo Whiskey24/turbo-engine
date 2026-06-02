@@ -58,7 +58,7 @@ export default function DashboardAnalyticsPage() {
 
             const { data: assets, error: assetErr } = await supabase
                 .from("portfolio_assets")
-                .select("id, name, institution, iban, ticker, isin, type_slug, asset_types(name)");
+                .select("id, name, institution, iban, ticker, isin, type_slug, asset_categories(name)");
 
             if (assetErr || !assets) throw assetErr;
 
@@ -83,7 +83,7 @@ export default function DashboardAnalyticsPage() {
 
             assets.forEach((asset: PortfolioAssetWithTypeName) => {
                 const balance = latestBalancesByAsset[asset.id] || 0;
-                const typeName = asset.asset_types?.name || "Unclassified Assets";
+                const typeName = asset.asset_categories?.name || "Unclassified Categories";
 
                 if (balance > 0) {
                     typeSummationMap[typeName] = (typeSummationMap[typeName] || 0) + balance;

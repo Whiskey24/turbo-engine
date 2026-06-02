@@ -30,7 +30,7 @@ export async function deleteAllPortfolioData(): Promise<{ ok: true } | { ok: fal
     }
 
     const { error: typesError } = await supabase
-        .from("asset_types")
+        .from("asset_categories")
         .delete()
         .eq("user_id", userId);
 

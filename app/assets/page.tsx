@@ -51,14 +51,14 @@ export default function AssetsPage() {
 
     const fetchData = useCallback(async () => {
         const { data: fetchTypes } = await supabase
-            .from("asset_types")
+            .from("asset_categories")
             .select("*")
             .order("name", { ascending: true });
 
-        // type_slug is now a direct column on portfolio_assets — no longer joined from asset_types
+        // type_slug is now a direct column on portfolio_assets — no longer joined from asset_categories
         const { data: fetchAssets } = await supabase
             .from("portfolio_assets")
-            .select("*, asset_types(name)")
+            .select("*, asset_categories(name)")
             .order("name", { ascending: true });
 
         const { data: fetchValuations } = await supabase
@@ -126,8 +126,8 @@ export default function AssetsPage() {
             valA = (a.institution || "").toLowerCase();
             valB = (b.institution || "").toLowerCase();
         } else if (field === "type") {
-            valA = (a.asset_types?.name || "").toLowerCase();
-            valB = (b.asset_types?.name || "").toLowerCase();
+            valA = (a.asset_categories?.name || "").toLowerCase();
+            valB = (b.asset_categories?.name || "").toLowerCase();
         } else if (field === "valuation") {
             valA = latestValuations[a.id]?.balance_amount ?? -1;
             valB = latestValuations[b.id]?.balance_amount ?? -1;
@@ -248,7 +248,7 @@ export default function AssetsPage() {
                                         {/* Type group badge + per-asset classification label */}
                                         <div className="flex flex-col items-end gap-0.5 shrink-0 ml-2">
                                             <span className="text-[10px] font-bold bg-secondary text-secondary-foreground px-2 py-0.5 rounded tracking-wider">
-                                                {asset.asset_types?.name || "Asset"}
+                                                {asset.asset_categories?.name || "Asset"}
                                             </span>
                                             {asset.type_slug && asset.type_slug in ASSET_TYPE_LABELS && (
                                                 <span className="text-[9px] text-muted-foreground font-medium">
@@ -346,7 +346,7 @@ export default function AssetsPage() {
                                                 {/* Type group badge + per-asset classification label */}
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="text-[10px] font-medium bg-secondary text-secondary-foreground px-2 py-0.5 rounded w-fit">
-                                                        {asset.asset_types?.name || "Asset"}
+                                                        {asset.asset_categories?.name || "Asset"}
                                                     </span>
                                                     {asset.type_slug && asset.type_slug in ASSET_TYPE_LABELS && (
                                                         <span className="text-[9px] text-muted-foreground pl-0.5">

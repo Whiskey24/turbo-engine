@@ -51,7 +51,7 @@ export default function YearEndAllocationChart() {
 
             const [{ data: assets, error: assetError }, { data: valuations, error: valuationError }] =
                 await Promise.all([
-                    supabase.from("portfolio_assets").select("id, asset_types(name)"),
+                    supabase.from("portfolio_assets").select("id, asset_categories(name)"),
                     supabase
                         .from("asset_valuations")
                         .select("asset_id, valuation_date, balance_amount")
@@ -63,7 +63,7 @@ export default function YearEndAllocationChart() {
 
             const assetsWithType = (assets ?? []).map((asset) => ({
                 id: asset.id,
-                typeName: asset.asset_types?.name ?? "Unclassified Assets",
+                typeName: asset.asset_categories?.name ?? "Unclassified Assets",
             }));
 
             const result = buildYearEndAllocationByType(assetsWithType, valuations ?? []);

@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -39,12 +37,12 @@ export type Database = {
   }
   public: {
     Tables: {
-      asset_types: {
+      // Renamed from asset_types → asset_categories (migration 20260602000000)
+      asset_categories: {
         Row: {
           created_at: string
           id: string
           name: string
-          // type_slug removed — it now lives on portfolio_assets
           user_id: string
         }
         Insert: {
@@ -107,7 +105,6 @@ export type Database = {
           login_url: string | null
           name: string
           ticker: string | null
-          // type_slug moved here from asset_types
           type_slug: string
           type_id: string
           user_id: string
@@ -142,10 +139,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "portfolio_assets_type_id_fkey"
+            foreignKeyName: "portfolio_assets_type_id_asset_categories_fkey"
             columns: ["type_id"]
             isOneToOne: false
-            referencedRelation: "asset_types"
+            referencedRelation: "asset_categories"
             referencedColumns: ["id"]
           },
         ]
@@ -337,8 +334,10 @@ export const Constants = {
   },
 } as const
 
-// Allowed slug values — kept here so UI components can import a single
-// source of truth rather than hardcoding the list in multiple places.
+// ---------------------------------------------------------------------------
+// Asset slug constants — single source of truth for UI and validation
+// ---------------------------------------------------------------------------
+
 export const ASSET_TYPE_SLUGS = [
   "BANK_ACCOUNT",
   "STOCK",

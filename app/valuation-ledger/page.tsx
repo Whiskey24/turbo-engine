@@ -46,7 +46,7 @@ export default function ValuationLedgerPage() {
 
     // --- Core Sync Engines ---
     const fetchLedger = useCallback(async () => {
-        // We traverse: asset_valuations -> portfolio_assets -> asset_types(name)
+        // We traverse: asset_valuations -> portfolio_assets -> asset_categories(name)
         const { data: logs } = await supabase
             .from("asset_valuations")
             .select(`
@@ -58,7 +58,7 @@ export default function ValuationLedgerPage() {
                 name, 
                 institution, 
                 type_slug,
-                asset_types(name)
+                asset_categories(name)
             )
         `)
             .order("valuation_date", { ascending: false });
@@ -182,7 +182,7 @@ export default function ValuationLedgerPage() {
     const uniqueAssetTypes = Array.from(
         new Set(
             ledger
-                .map((log) => log.portfolio_assets?.asset_types?.name)
+                .map((log) => log.portfolio_assets?.asset_categories?.name)
                 .filter((name): name is string => Boolean(name))
         )
     ).sort();
@@ -192,7 +192,7 @@ export default function ValuationLedgerPage() {
         .filter((log) => {
             const matchesAsset = selectedFilterAssetId === "ALL" || log.asset_id === selectedFilterAssetId;
             // Matches against the text category name instead of the raw type_id parameter
-            const matchesType = selectedFilterType === "ALL" || log.portfolio_assets?.asset_types?.name === selectedFilterType;
+            const matchesType = selectedFilterType === "ALL" || log.portfolio_assets?.asset_categories?.name === selectedFilterType;
             return matchesAsset && matchesType;
         })
         .sort((a, b) => {
@@ -397,7 +397,7 @@ export default function ValuationLedgerPage() {
                                                 {/* RENDERING ROW VALUE CELL */}
                                                 <td className="p-3 whitespace-nowrap">
                                                     <span className="px-2 py-0.5 bg-muted border text-[10px] font-medium rounded-full text-muted-foreground uppercase tracking-wider">
-                                                        {log.portfolio_assets?.asset_types?.name || "Unclassified"}
+                                                        {log.portfolio_assets?.asset_categories?.name || "Unclassified"}
                                                     </span>
                                                 </td>
                                                 <td className="p-3 text-right font-bold text-foreground font-mono whitespace-nowrap">

@@ -48,7 +48,7 @@ export default function ChartsHistoryPage() {
 
             const { data: assets, error: assetErr } = await supabase
                 .from("portfolio_assets")
-                .select("id, name, institution, iban, ticker, isin, asset_types(name)");
+                .select("id, name, institution, iban, ticker, isin, asset_categories(name)");
 
             if (assetErr || !assets) throw assetErr;
 
@@ -111,7 +111,7 @@ export default function ChartsHistoryPage() {
 
                     if (latestBalance <= 0) continue;
 
-                    const typeName = asset.asset_types?.name || "Unclassified Assets";
+                    const typeName = asset.asset_categories?.name || "Unclassified Categories";
                     allTypes.add(typeName);
 
                     rows.push({

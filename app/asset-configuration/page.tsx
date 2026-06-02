@@ -120,14 +120,14 @@ export default function AssetConfigurationPage() {
 
     const fetchData = useCallback(async () => {
         const { data: fetchTypes } = await supabase
-            .from("asset_types")
+            .from("asset_categories")
             .select("*")
             .order("name", { ascending: true });
 
-        // type_slug is now a direct column on portfolio_assets — no longer joined from asset_types
+        // type_slug is now a direct column on portfolio_assets — no longer joined from asset_categories
         const { data: fetchAssets } = await supabase
             .from("portfolio_assets")
-            .select("*, asset_types(name)")
+            .select("*, asset_categories(name)")
             .order("name", { ascending: true });
 
         const { data: fetchValuations } = await supabase
@@ -179,7 +179,7 @@ export default function AssetConfigurationPage() {
         e.preventDefault();
         setLoadingType(true);
 
-        const { error } = await supabase.from("asset_types").insert([
+        const { error } = await supabase.from("asset_categories").insert([
             { name: newTypeName },
         ]);
 
@@ -208,7 +208,7 @@ export default function AssetConfigurationPage() {
         setLoadingEditType(true);
 
         const { error } = await supabase
-            .from("asset_types")
+            .from("asset_categories")
             .update({ name: editTypeName })
             .eq("id", editingType.id);
 
@@ -224,7 +224,7 @@ export default function AssetConfigurationPage() {
     const handleDeleteType = async (id: string, name: string) => {
         if (!confirm(`Are you sure you want to delete the "${name}" template classification?`)) return;
 
-        const { error } = await supabase.from("asset_types").delete().eq("id", id);
+        const { error } = await supabase.from("asset_categories").delete().eq("id", id);
 
         if (error) {
             if (error.code === "23503") {
@@ -388,8 +388,8 @@ export default function AssetConfigurationPage() {
             valA = (a.institution || "").toLowerCase();
             valB = (b.institution || "").toLowerCase();
         } else if (field === "type") {
-            valA = (a.asset_types?.name || "").toLowerCase();
-            valB = (b.asset_types?.name || "").toLowerCase();
+            valA = (a.asset_categories?.name || "").toLowerCase();
+            valB = (b.asset_categories?.name || "").toLowerCase();
         } else if (field === "valuation") {
             valA = latestValuations[a.id]?.balance_amount ?? -1;
             valB = latestValuations[b.id]?.balance_amount ?? -1;
@@ -731,7 +731,7 @@ export default function AssetConfigurationPage() {
                                         </div>
                                         <div className="flex flex-col items-end gap-0.5">
                                             <span className="text-[10px] font-bold bg-secondary text-secondary-foreground px-2 py-0.5 rounded tracking-wider">
-                                                {asset.asset_types?.name || "Asset"}
+                                                {asset.asset_categories?.name || "Asset"}
                                             </span>
                                             {asset.type_slug && asset.type_slug in ASSET_TYPE_LABELS && (
                                                 <span className="text-[9px] text-muted-foreground font-medium">
@@ -839,7 +839,7 @@ export default function AssetConfigurationPage() {
                                             <td className="p-3">
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="text-[10px] font-medium bg-secondary text-secondary-foreground px-2 py-0.5 rounded w-fit">
-                                                        {asset.asset_types?.name || "Asset"}
+                                                        {asset.asset_categories?.name || "Asset"}
                                                     </span>
                                                     {asset.type_slug && asset.type_slug in ASSET_TYPE_LABELS && (
                                                         <span className="text-[9px] text-muted-foreground pl-0.5">
@@ -904,7 +904,7 @@ export default function AssetConfigurationPage() {
                         <div className="mb-4 flex items-start justify-between gap-3">
                             <div>
                                 <h3 id="edit-type-title" className="text-base font-semibold text-foreground">
-                                    Edit Asset Type
+                                    Edit Asset Category
                                 </h3>
                             </div>
                             <button
@@ -921,7 +921,7 @@ export default function AssetConfigurationPage() {
                         {/* Edit type form: name only — slug is now on each asset */}
                         <form onSubmit={handleUpdateType} className="space-y-4">
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-muted-foreground">Asset type label</label>
+                                <label className="text-xs font-medium text-muted-foreground">Asset Category label</label>
                                 <input
                                     type="text" value={editTypeName} onChange={(e) => setEditTypeName(e.target.value)}
                                     className="border rounded-md p-2 bg-background text-sm" required
@@ -966,7 +966,7 @@ export default function AssetConfigurationPage() {
                                     Edit Asset Profile
                                 </h3>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    Update structural and identifying parameters for this account.
+                                    Update asset details and classification. Note that changing the asset category or type may affect how future valuations are categorized and displayed in your portfolio overview.
                                 </p>
                             </div>
                             <button
@@ -982,7 +982,7 @@ export default function AssetConfigurationPage() {
 
                         <form onSubmit={handleUpdateAsset} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-muted-foreground">Mapped Asset Type Definition</label>
+                                <label className="text-xs font-medium text-muted-foreground">Asset Category</label>
                                 <select
                                     value={editTypeId} onChange={(e) => setEditTypeId(e.target.value)}
                                     className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full"
@@ -992,7 +992,7 @@ export default function AssetConfigurationPage() {
                             </div>
 
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-muted-foreground">Account Description Name</label>
+                                <label className="text-xs font-medium text-muted-foreground">Asset Name</label>
                                 <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="border rounded-md p-2 bg-background text-sm" required />
                             </div>
 
