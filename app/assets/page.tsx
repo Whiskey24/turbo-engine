@@ -16,6 +16,7 @@ const ASSET_TYPE_LABELS: Record<typeof ASSET_TYPE_SLUGS[number], string> = {
     CRYPTO: "Cryptocurrency",
     FUND_ETF: "Mutual Funds & ETFs",
     REAL_ESTATE: "Real Estate Property",
+    BOND: "Bond / Fixed Income",
     OTHER: "Other Assets / Miscellaneous",
 };
 

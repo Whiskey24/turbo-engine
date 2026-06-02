@@ -108,6 +108,13 @@ export type Database = {
           type_slug: string
           type_id: string
           user_id: string
+          // Bond-specific fields (null for all other asset types)
+          nominal_value: number | null
+          coupon_rate: number | null
+          coupon_frequency: number | null
+          maturity_date: string | null
+          first_coupon_date: string | null
+          day_count_basis: string | null
         }
         Insert: {
           comments?: string | null
@@ -122,6 +129,12 @@ export type Database = {
           type_slug: string
           type_id: string
           user_id?: string
+          nominal_value?: number | null
+          coupon_rate?: number | null
+          coupon_frequency?: number | null
+          maturity_date?: string | null
+          first_coupon_date?: string | null
+          day_count_basis?: string | null
         }
         Update: {
           comments?: string | null
@@ -136,6 +149,12 @@ export type Database = {
           type_slug?: string
           type_id?: string
           user_id?: string
+          nominal_value?: number | null
+          coupon_rate?: number | null
+          coupon_frequency?: number | null
+          maturity_date?: string | null
+          first_coupon_date?: string | null
+          day_count_basis?: string | null
         }
         Relationships: [
           {
@@ -146,7 +165,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      },
+      }
       login_history: {
         Row: {
           id: string
@@ -344,7 +363,37 @@ export const ASSET_TYPE_SLUGS = [
   "CRYPTO",
   "FUND_ETF",
   "REAL_ESTATE",
+  "BOND",
   "OTHER",
 ] as const;
 
 export type AssetTypeSlug = (typeof ASSET_TYPE_SLUGS)[number];
+
+// Valid coupon frequency values (payments per year)
+export const COUPON_FREQUENCIES = [1, 2, 4, 12] as const;
+export type CouponFrequency = (typeof COUPON_FREQUENCIES)[number];
+
+export const COUPON_FREQUENCY_LABELS: Record<CouponFrequency, string> = {
+  1: "Annual",
+  2: "Semi-annual",
+  4: "Quarterly",
+  12: "Monthly",
+};
+
+// Valid day-count basis values for accrued interest calculation
+export const DAY_COUNT_BASES = ["30/360", "ACT/365", "ACT/ACT", "ACT/360"] as const;
+export type DayCountBasis = (typeof DAY_COUNT_BASES)[number];
+
+// Valid transaction types — mirrors the CHECK constraint on asset_transactions
+export const TRANSACTION_TYPES = [
+  "BUY",
+  "SELL",
+  "DIVIDEND",
+  "COUPON",
+  "STOCK_DIV",
+  "SPLIT",
+  "TRANSFER_IN",
+  "TRANSFER_OUT",
+] as const;
+
+export type TransactionType = (typeof TRANSACTION_TYPES)[number];
