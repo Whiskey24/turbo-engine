@@ -20,9 +20,6 @@ export type AssetValuationInsert = TablesInsert<"asset_valuations">;
 
 // ---------------------------------------------------------------------------
 // Derived query types
-//
-// Bond fields (nominal_value, coupon_rate, etc.) are included automatically
-// via the `*` wildcard on portfolio_assets — no query changes needed.
 // ---------------------------------------------------------------------------
 
 const portfolioAssetWithTypeQuery = supabase
@@ -68,15 +65,24 @@ export type ValuationReference = QueryData<typeof valuationReferenceQuery>[numbe
 // Export / import query types
 // ---------------------------------------------------------------------------
 
+/** Asset category export — name only; slug no longer lives on the category. */
 const exportAssetTypeQuery = supabase
     .from("asset_categories")
     .select("name");
 
 export type ExportAssetTypeRow = QueryData<typeof exportAssetTypeQuery>[number];
 
+/**
+ * Asset export — includes all bond-specific fields so they round-trip through
+ * the TSV without a separate bond file.
+ */
 const exportAssetQuery = supabase
     .from("portfolio_assets")
-    .select("name, institution, login_url, comments, iban, ticker, isin, type_slug, asset_categories(name)");
+    .select(`
+        name, institution, login_url, comments, iban, ticker, isin, type_slug,
+        nominal_value, coupon_rate, coupon_frequency, maturity_date, first_coupon_date, day_count_basis,
+        asset_categories(name)
+    `);
 
 export type ExportAssetRow = QueryData<typeof exportAssetQuery>[number];
 
@@ -87,6 +93,20 @@ const exportValuationQuery = supabase.from("asset_valuations").select(`
 `);
 
 export type ExportValuationRow = QueryData<typeof exportValuationQuery>[number];
+
+/**
+ * Stock transaction export — joined to portfolio_assets for the asset name.
+ * tax_lots and lot_matches are computed by the FIFO trigger on insert and are
+ * NOT exported — they are recreated automatically when transactions are
+ * re-imported.
+ */
+const exportTransactionQuery = supabase.from("asset_transactions").select(`
+    transaction_type, transacted_at, settled_at, quantity, price_per_unit,
+    total_amount, fee, tax_amount, currency, exchange_rate, broker, external_ref,
+    notes, accrued_interest, portfolio_assets!inner(name, user_id)
+`);
+
+export type ExportTransactionRow = QueryData<typeof exportTransactionQuery>[number];
 
 // ---------------------------------------------------------------------------
 // Helper functions

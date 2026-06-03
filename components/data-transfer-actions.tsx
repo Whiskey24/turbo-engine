@@ -7,34 +7,42 @@ import { cn } from "@/lib/utils";
 import { refreshPortfolioViews } from "@/lib/portfolio-refresh";
 import {
     exportPortfolioData,
-    importAssetTypesFromTsv,
     importAssetsFromTsv,
-    importTransactionsFromTsv,
+    importValuationsFromTsv,
+    importStockTransactionsFromTsv,
 } from "@/lib/portfolio-import-export";
 
-type ImportKind = "asset_types" | "assets" | "transactions";
-
 // ---------------------------------------------------------------------------
-// Import option descriptors
+// Import kinds
 //
-// asset_types: type_slug removed — it is no longer stored on the type
-// assets:      type_slug added  — each asset now carries its own classification
+// "asset_types" removed — categories are created automatically from the
+// type_name column inside the assets file.
+// "stock_transactions" added — covers asset_transactions (BUY / SELL / etc.).
+// "valuations" replaces "transactions" — covers asset_valuations (balance
+//   snapshots used for bank accounts, real estate, etc.).
 // ---------------------------------------------------------------------------
+
+type ImportKind = "assets" | "valuations" | "stock_transactions";
+
 const importOptions: { kind: ImportKind; label: string; description: string }[] = [
-    {
-        kind: "asset_types",
-        label: "Asset types",
-        description: "name",
-    },
     {
         kind: "assets",
         label: "Assets",
-        description: "type_name, type_slug, name, institution, login_url, comments, iban, ticker, isin",
+        description:
+            "type_name, type_slug, name, institution, login_url, comments, iban, ticker, isin" +
+            " [bond extras: nominal_value, coupon_rate, coupon_frequency, maturity_date, first_coupon_date, day_count_basis]",
     },
     {
-        kind: "transactions",
-        label: "Transactions",
-        description: "asset_name, valuation_date, balance_amount (institution column ignored if present)",
+        kind: "valuations",
+        label: "Valuations",
+        description: "asset_name, valuation_date, balance_amount",
+    },
+    {
+        kind: "stock_transactions",
+        label: "Stock transactions",
+        description:
+            "asset_name, transaction_type, transacted_at, quantity, price_per_unit, total_amount, fee, tax_amount, currency, exchange_rate" +
+            " [bond extra: accrued_interest]",
     },
 ];
 
@@ -58,7 +66,12 @@ export default function DataTransferActions({ hasData, onDataChanged }: DataTran
             alert(result.message);
             return;
         }
-        alert("Exported 3 tab-separated files: asset types, assets, and transactions.");
+        alert(
+            "Exported 3 tab-separated files:\n" +
+            "• portfolio-assets — all assets including bond parameters\n" +
+            "• portfolio-valuations — manual balance snapshots\n" +
+            "• portfolio-stock-transactions — buy / sell / coupon / dividend records"
+        );
     };
 
     const startImport = (kind: ImportKind) => {
@@ -78,11 +91,11 @@ export default function DataTransferActions({ hasData, onDataChanged }: DataTran
         const content = await file.text();
 
         const result =
-            kind === "asset_types"
-                ? await importAssetTypesFromTsv(content)
-                : kind === "assets"
-                    ? await importAssetsFromTsv(content)
-                    : await importTransactionsFromTsv(content);
+            kind === "assets"
+                ? await importAssetsFromTsv(content)
+                : kind === "valuations"
+                    ? await importValuationsFromTsv(content)
+                    : await importStockTransactionsFromTsv(content);
 
         setBusy(null);
 
@@ -92,18 +105,16 @@ export default function DataTransferActions({ hasData, onDataChanged }: DataTran
         }
 
         const label =
-            kind === "asset_types" ? "asset type" : kind === "assets" ? "asset" : "transaction";
+            kind === "assets" ? "asset"
+                : kind === "valuations" ? "valuation"
+                    : "stock transaction";
 
         refreshPortfolioViews();
         router.refresh();
-
-        // Re-check whether we now have data so the export button enables
         onDataChanged();
 
         if (result.skipped > 0) {
-            alert(
-                `Imported ${result.imported} ${label} record(s). Skipped ${result.skipped} duplicate or invalid row(s).`
-            );
+            alert(`Imported ${result.imported} ${label} record(s). Skipped ${result.skipped} duplicate or invalid row(s).`);
             return;
         }
 
@@ -143,8 +154,13 @@ export default function DataTransferActions({ hasData, onDataChanged }: DataTran
                 )}
             >
                 <Upload className="h-4 w-4 shrink-0" />
-                <span className="flex-1 text-left">{busy && busy !== "export" ? "Importing..." : "Import data"}</span>
-                {importOpen ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+                <span className="flex-1 text-left">
+                    {busy && busy !== "export" ? "Importing..." : "Import data"}
+                </span>
+                {importOpen
+                    ? <ChevronUp className="h-4 w-4 shrink-0" />
+                    : <ChevronDown className="h-4 w-4 shrink-0" />
+                }
             </button>
 
             {importOpen && (
@@ -166,8 +182,10 @@ export default function DataTransferActions({ hasData, onDataChanged }: DataTran
                         </button>
                     ))}
                     <p className="px-3 pt-1 text-[10px] text-muted-foreground">
-                        Tab-separated (.tsv) files. Import asset types before assets, then transactions.
-                        Duplicate names and asset/date pairs are skipped. Transaction imports match assets by name only.
+                        Tab-separated (.tsv) files. Import assets first — asset categories are created
+                        automatically from the type_name column. Import valuations and stock transactions
+                        after the assets they reference. Stock transactions are inserted in file order to
+                        preserve FIFO lot sequencing; duplicate asset/timestamp pairs are skipped.
                     </p>
                 </div>
             )}

@@ -59,6 +59,131 @@ export type Database = {
         }
         Relationships: []
       }
+
+      asset_prices: {
+        Row: {
+          id: string
+          user_id: string
+          asset_id: string
+          price_date: string
+          price: number
+          currency: string
+          exchange_rate: number
+          source: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string
+          asset_id: string
+          price_date: string
+          price: number
+          currency?: string
+          exchange_rate?: number
+          source?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          asset_id?: string
+          price_date?: string
+          price?: number
+          currency?: string
+          exchange_rate?: number
+          source?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_prices_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
+      // asset_transactions — buy / sell / dividend / coupon / split / transfer records.
+      // Inserting a row fires the process_fifo_lots trigger which auto-populates
+      // tax_lots and lot_matches.
+      asset_transactions: {
+        Row: {
+          id: string
+          user_id: string
+          asset_id: string
+          transaction_type: string
+          transacted_at: string
+          settled_at: string | null
+          quantity: number
+          price_per_unit: number
+          total_amount: number
+          fee: number
+          tax_amount: number
+          currency: string
+          exchange_rate: number
+          broker: string | null
+          external_ref: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+          // Bond-specific: AI paid (BUY) or received (SELL/COUPON); null for non-bonds
+          accrued_interest: number | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string
+          asset_id: string
+          transaction_type: string
+          transacted_at: string
+          settled_at?: string | null
+          quantity: number
+          price_per_unit?: number
+          total_amount: number
+          fee?: number
+          tax_amount?: number
+          currency?: string
+          exchange_rate?: number
+          broker?: string | null
+          external_ref?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+          accrued_interest?: number | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          asset_id?: string
+          transaction_type?: string
+          transacted_at?: string
+          settled_at?: string | null
+          quantity?: number
+          price_per_unit?: number
+          total_amount?: number
+          fee?: number
+          tax_amount?: number
+          currency?: string
+          exchange_rate?: number
+          broker?: string | null
+          external_ref?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+          accrued_interest?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_transactions_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
       asset_valuations: {
         Row: {
           asset_id: string
@@ -94,6 +219,130 @@ export type Database = {
           },
         ]
       }
+
+      login_history: {
+        Row: {
+          id: string
+          user_id: string
+          login_at: string
+          user_agent: string | null
+          ip_address: string | null
+          location: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string
+          login_at?: string
+          user_agent?: string | null
+          ip_address?: string | null
+          location?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          login_at?: string
+          user_agent?: string | null
+          ip_address?: string | null
+          location?: string | null
+        }
+        Relationships: []
+      }
+
+      // lot_matches — computed by process_fifo_lots trigger on SELL / TRANSFER_OUT.
+      // Never written to directly by application code.
+      lot_matches: {
+        Row: {
+          id: string
+          user_id: string
+          asset_id: string
+          sell_transaction_id: string
+          lot_id: string
+          quantity_matched: number
+          acquired_at: string
+          cost_per_unit: number
+          cost_currency: string
+          cost_exchange_rate: number
+          cost_basis: number
+          cost_basis_base: number
+          sold_at: string
+          sell_price_per_unit: number
+          sell_currency: string
+          sell_exchange_rate: number
+          proceeds: number
+          proceeds_base: number
+          realized_pnl: number          // generated column
+          realized_pnl_base: number     // generated column
+          held_days: number             // generated column
+          is_long_term: boolean         // generated column
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string
+          asset_id: string
+          sell_transaction_id: string
+          lot_id: string
+          quantity_matched: number
+          acquired_at: string
+          cost_per_unit: number
+          cost_currency: string
+          cost_exchange_rate?: number
+          cost_basis: number
+          cost_basis_base: number
+          sold_at: string
+          sell_price_per_unit: number
+          sell_currency: string
+          sell_exchange_rate?: number
+          proceeds: number
+          proceeds_base: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          asset_id?: string
+          sell_transaction_id?: string
+          lot_id?: string
+          quantity_matched?: number
+          acquired_at?: string
+          cost_per_unit?: number
+          cost_currency?: string
+          cost_exchange_rate?: number
+          cost_basis?: number
+          cost_basis_base?: number
+          sold_at?: string
+          sell_price_per_unit?: number
+          sell_currency?: string
+          sell_exchange_rate?: number
+          proceeds?: number
+          proceeds_base?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lot_matches_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lot_matches_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "tax_lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lot_matches_sell_transaction_id_fkey"
+            columns: ["sell_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "asset_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
       portfolio_assets: {
         Row: {
           comments: string | null
@@ -166,33 +415,71 @@ export type Database = {
           },
         ]
       }
-      login_history: {
+
+      // tax_lots — computed by process_fifo_lots trigger on BUY / TRANSFER_IN / STOCK_DIV.
+      // Never written to directly by application code.
+      tax_lots: {
         Row: {
           id: string
           user_id: string
-          login_at: string
-          user_agent: string | null
-          ip_address: string | null
-          location: string | null
+          asset_id: string
+          transaction_id: string
+          acquired_at: string
+          quantity_acquired: number
+          quantity_remaining: number
+          cost_per_unit: number
+          currency: string
+          exchange_rate: number
+          cost_per_unit_base: number    // generated column
+          created_at: string
+          accrued_interest_paid: number
         }
         Insert: {
           id?: string
           user_id?: string
-          login_at?: string
-          user_agent?: string | null
-          ip_address?: string | null
-          location?: string | null
+          asset_id: string
+          transaction_id: string
+          acquired_at: string
+          quantity_acquired: number
+          quantity_remaining: number
+          cost_per_unit: number
+          currency: string
+          exchange_rate?: number
+          created_at?: string
+          accrued_interest_paid?: number
         }
         Update: {
           id?: string
           user_id?: string
-          login_at?: string
-          user_agent?: string | null
-          ip_address?: string | null
-          location?: string | null
+          asset_id?: string
+          transaction_id?: string
+          acquired_at?: string
+          quantity_acquired?: number
+          quantity_remaining?: number
+          cost_per_unit?: number
+          currency?: string
+          exchange_rate?: number
+          created_at?: string
+          accrued_interest_paid?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tax_lots_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tax_lots_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "asset_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
+
       user_settings: {
         Row: {
           user_id: string

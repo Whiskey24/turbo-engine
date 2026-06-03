@@ -78,7 +78,8 @@ export default function DeleteAllDataAction({ onDataChanged }: DeleteAllDataActi
                                     Delete all portfolio data
                                 </h3>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    This permanently removes all asset types, assets, and transactions for your
+                                    This permanently removes all asset categories, assets, valuations,
+                                    stock transactions, tax lots, lot matches, and price records for your
                                     account. This cannot be undone.
                                 </p>
                             </div>
