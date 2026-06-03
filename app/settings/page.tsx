@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import DataTransferActions from "@/components/data-transfer-actions";
 import DeleteAllDataAction from "@/components/delete-all-data-action";
+import DeleteAccountAction from "@/components/delete-account-action";
 import LoginHistory from "@/components/login-history";
 import ChangePassword from "@/components/change-password";
 import LocaleSettings from "@/components/locale-settings";
@@ -25,7 +26,8 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
 
       <div className="space-y-6">
-        {/* Full Width Login History Section */}
+
+        {/* Full Width: Login History */}
         <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
           <h2 className="text-lg font-semibold mb-2">Login History</h2>
           <p className="text-sm text-muted-foreground mb-4">
@@ -34,10 +36,10 @@ export default function SettingsPage() {
           <LoginHistory />
         </div>
 
-        {/* Responsive Grid for Smaller Cards */}
+        {/* Responsive 2-column grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 space-y-0">
 
-          {/* Locale & Formatting Section */}
+          {/* Locale & Formatting */}
           <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
             <h2 className="text-lg font-semibold mb-2">Locale & Formatting</h2>
             <p className="text-sm text-muted-foreground mb-4">
@@ -46,7 +48,7 @@ export default function SettingsPage() {
             <LocaleSettings />
           </div>
 
-          {/* Change Password Section */}
+          {/* Change Password */}
           <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
             <h2 className="text-lg font-semibold mb-2">Change Password</h2>
             <p className="text-sm text-muted-foreground mb-4">
@@ -55,7 +57,7 @@ export default function SettingsPage() {
             <ChangePassword />
           </div>
 
-          {/* Backup & Restore Section */}
+          {/* Backup & Restore */}
           <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
             <h2 className="text-lg font-semibold mb-2">Backup & Restore</h2>
             <p className="text-sm text-muted-foreground mb-4">
@@ -64,16 +66,27 @@ export default function SettingsPage() {
             <DataTransferActions hasData={hasData} onDataChanged={checkHasData} />
           </div>
 
-          {/* Delete My Data Section */}
+          {/* Delete My Data */}
           <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
             <h2 className="text-lg font-semibold mb-2">Delete My Data</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Permanently remove all your portfolio data
+              Permanently remove all your portfolio data while keeping your account
             </p>
             <DeleteAllDataAction onDataChanged={checkHasData} />
           </div>
 
         </div>
+
+        {/* Full width: Delete Account — kept separate and below the grid to
+            reduce accidental proximity to the less destructive actions above */}
+        <div className="border border-destructive/30 rounded-lg p-4 bg-card text-card-foreground shadow-sm">
+          <h2 className="text-lg font-semibold mb-2 text-destructive">Delete My Account</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Permanently delete all your data and remove your account. This cannot be undone.
+          </p>
+          <DeleteAccountAction />
+        </div>
+
       </div>
 
       <div className="mt-8 pt-4 border-t text-sm text-muted-foreground text-right">

@@ -2,17 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, X, Eye, EyeOff } from "lucide-react";
+import { UserX, X, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { deleteAllPortfolioData } from "@/lib/delete-portfolio-data";
-import { refreshPortfolioViews } from "@/lib/portfolio-refresh";
-import { supabase } from "@/lib/supabase";
+import { deleteAccount } from "@/lib/delete-account";
 
-interface DeleteAllDataActionProps {
-    onDataChanged: () => void;
-}
-
-export default function DeleteAllDataAction({ onDataChanged }: DeleteAllDataActionProps) {
+export default function DeleteAccountAction() {
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const [password, setPassword] = useState("");
@@ -35,26 +29,7 @@ export default function DeleteAllDataAction({ onDataChanged }: DeleteAllDataActi
         setDeleting(true);
         setErrorMsg("");
 
-        // Verify identity before destructive action
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user?.email) {
-            setErrorMsg("You must be signed in to delete your data.");
-            setDeleting(false);
-            return;
-        }
-
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-            email: user.email,
-            password,
-        });
-
-        if (signInError) {
-            setErrorMsg("Incorrect password. Please try again.");
-            setDeleting(false);
-            return;
-        }
-
-        const result = await deleteAllPortfolioData();
+        const result = await deleteAccount(password);
         setDeleting(false);
 
         if (!result.ok) {
@@ -62,11 +37,8 @@ export default function DeleteAllDataAction({ onDataChanged }: DeleteAllDataActi
             return;
         }
 
-        closeDialog();
-        refreshPortfolioViews();
-        router.refresh();
-        onDataChanged();
-        alert("All portfolio data has been permanently deleted.");
+        // Account is gone — redirect to the sign-in page
+        router.replace("/login");
     };
 
     return (
@@ -79,8 +51,8 @@ export default function DeleteAllDataAction({ onDataChanged }: DeleteAllDataActi
                     "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 )}
             >
-                <Trash2 className="h-4 w-4 shrink-0" />
-                <span>Delete all data</span>
+                <UserX className="h-4 w-4 shrink-0" />
+                <span>Delete my account</span>
             </button>
 
             {open && (
@@ -89,7 +61,7 @@ export default function DeleteAllDataAction({ onDataChanged }: DeleteAllDataActi
                     style={{ zIndex: 9999 }}
                     role="dialog"
                     aria-modal="true"
-                    aria-labelledby="delete-all-data-title"
+                    aria-labelledby="delete-account-title"
                 >
                     <div
                         className="relative w-full max-w-md rounded-xl border bg-card p-5 shadow-lg"
@@ -98,15 +70,16 @@ export default function DeleteAllDataAction({ onDataChanged }: DeleteAllDataActi
                         <div className="mb-4 flex items-start justify-between gap-3">
                             <div>
                                 <h3
-                                    id="delete-all-data-title"
+                                    id="delete-account-title"
                                     className="text-base font-semibold text-destructive"
                                 >
-                                    Delete all portfolio data
+                                    Delete my account
                                 </h3>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    This permanently removes all asset categories, assets, valuations,
-                                    stock transactions, tax lots, lot matches, and price records for your
-                                    account. Your account itself is kept. This cannot be undone.
+                                    This permanently deletes all your portfolio data — categories, assets,
+                                    valuations, stock transactions, tax lots, and price records — and then
+                                    removes your account entirely. You will be signed out immediately and
+                                    cannot sign in again. This cannot be undone.
                                 </p>
                             </div>
                             <button
@@ -171,7 +144,7 @@ export default function DeleteAllDataAction({ onDataChanged }: DeleteAllDataActi
                                 disabled={!canConfirm}
                                 className="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-white transition hover:bg-destructive/90 disabled:opacity-50"
                             >
-                                {deleting ? "Deleting..." : "Delete everything"}
+                                {deleting ? "Deleting account..." : "Delete my account"}
                             </button>
                         </div>
                     </div>
