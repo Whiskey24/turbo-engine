@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import DataTransferActions from "@/components/data-transfer-actions";
 import DeleteAllDataAction from "@/components/delete-all-data-action";
 import DeleteAccountAction from "@/components/delete-account-action";
+import TestDataDownload from "@/components/test-data-download";
 import LoginHistory from "@/components/login-history";
 import ChangePassword from "@/components/change-password";
 import LocaleSettings from "@/components/locale-settings";
@@ -75,10 +76,21 @@ export default function SettingsPage() {
             <DeleteAllDataAction onDataChanged={checkHasData} />
           </div>
 
+          {/* Sample & Test Data — spans full width on md+ */}
+          <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm md:col-span-2">
+            <h2 className="text-lg font-semibold mb-2">Sample & Test Data</h2>
+            <p className="text-sm text-muted-foreground mb-0">
+              Download ready-to-import example files. The sample set illustrates the
+              column format for each file type. The 10-year dataset covers all asset
+              classifications and includes a validation reference so you can verify
+              FIFO realized P&L, coupon income, and year-end balance totals.
+            </p>
+            <TestDataDownload />
+          </div>
+
         </div>
 
-        {/* Full width: Delete Account — kept separate and below the grid to
-            reduce accidental proximity to the less destructive actions above */}
+        {/* Full width: Delete Account */}
         <div className="border border-destructive/30 rounded-lg p-4 bg-card text-card-foreground shadow-sm">
           <h2 className="text-lg font-semibold mb-2 text-destructive">Delete My Account</h2>
           <p className="text-sm text-muted-foreground mb-4">

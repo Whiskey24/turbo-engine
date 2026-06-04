@@ -503,7 +503,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      delete_all_portfolio_data: {
+        Args: Record<PropertyKey, never> // This indicates the function takes no arguments
+        Returns: undefined               // This matches the SQL "returns void"
+      }
     }
     Enums: {
       [_ in never]: never
