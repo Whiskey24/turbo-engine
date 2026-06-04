@@ -77,7 +77,7 @@ export default function DashboardCharts({ data }: { data: LogItem[] }) {
                                 cx="50%"
                                 cy="50%"
                                 outerRadius={75}
-                                label={({ name, percentage }) => `${name} (${percentage}%)`}
+                                label={({ name, payload }) => `${name} (${payload?.percentage}%)`}
                             >
                                 {pieData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
