@@ -500,7 +500,112 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      current_holdings: {
+        Row: {
+          user_id: string
+          asset_id: string
+          asset_name: string
+          ticker: string | null
+          isin: string | null
+          asset_type: string
+          local_currency: string
+          quantity_held: number
+          total_cost_local: number
+          total_cost_base: number
+          avg_cost_per_unit_local: number
+          avg_cost_per_unit_base: number
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      unrealized_pnl: {
+        Row: {
+          user_id: string
+          asset_id: string
+          asset_name: string
+          ticker: string | null
+          isin: string | null
+          asset_type: string
+          local_currency: string
+          base_currency: string
+          quantity_held: number
+          avg_cost_per_unit_local: number
+          avg_cost_per_unit_base: number
+          total_cost_local: number
+          total_cost_base: number
+          current_price: number | null
+          price_as_of: string | null
+          current_fx_rate: number | null
+          current_value_local: number | null
+          current_value_base: number | null
+          unrealized_pnl_local: number | null
+          unrealized_pnl_base: number | null
+          fx_effect: number | null
+          unrealized_pnl_pct: number | null
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      realized_pnl: {
+        Row: {
+          user_id: string
+          asset_id: string
+          asset_name: string
+          ticker: string | null
+          isin: string | null
+          asset_type: string
+          sell_transaction_id: string
+          lot_id: string
+          quantity_sold: number
+          acquired_at: string
+          sold_at: string
+          held_days: number
+          is_long_term: boolean
+          local_currency: string
+          cost_basis: number
+          proceeds: number
+          realized_pnl: number
+          cost_basis_base: number
+          proceeds_base: number
+          realized_pnl_base: number
+          realized_pnl_pct: number | null
+          fx_effect: number
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      portfolio_summary: {
+        Row: {
+          user_id: string
+          asset_id: string
+          asset_name: string
+          ticker: string | null
+          isin: string | null
+          asset_type: string
+          local_currency: string
+          base_currency: string
+          quantity_held: number
+          current_price: number | null
+          price_as_of: string | null
+          current_fx_rate: number | null
+          total_cost_base: number
+          current_value_base: number | null
+          unrealized_pnl_local: number | null
+          unrealized_pnl_base: number | null
+          unrealized_pnl_pct: number | null
+          unrealized_fx_effect: number | null
+          total_realized_local: number
+          total_realized_base: number
+          total_trades_closed: number
+          total_pnl_base: number
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
     }
     Functions: {
       delete_all_portfolio_data: {

@@ -12,7 +12,8 @@ import {
     LogOut,
     User,
     BookOpen,
-    Layers
+    Layers,
+    Coins
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
@@ -22,6 +23,7 @@ const navigationItems = [
     { name: "Trading Overview", href: "/trading-overview", icon: TrendingUp },
     { name: "Valuation Ledger", href: "/valuation-ledger", icon: History },
     { name: "Trading Journal", href: "/trading-journal", icon: BookOpen },
+    { name: "Update Prices", href: "/update-prices", icon: Coins },
     { name: "Historical Timelines", href: "/historical-timelines", icon: BarChart3 },
     { name: "Assets", href: "/assets", icon: Layers },
     { name: "Asset configuration", href: "/asset-configuration", icon: Database },
