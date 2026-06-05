@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import {
     Area,
     AreaChart,
@@ -9,7 +9,6 @@ import {
     CartesianGrid,
     LabelList,
     Legend,
-    ResponsiveContainer,
     Tooltip,
     XAxis,
     YAxis,
@@ -45,6 +44,10 @@ export default function YearEndAllocationChart() {
     const [locale, setLocale] = useState<string>("en-GB");
     const [chartVariant, setChartVariant] = useState<ChartVariant>("bar");
 
+    // Dimensions state to store calculated container size
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
+
     const loadChart = useCallback(async () => {
         try {
             setLoading(true);
@@ -68,7 +71,6 @@ export default function YearEndAllocationChart() {
 
             const result = buildYearEndAllocationByType(assetsWithType, valuations ?? []);
 
-            // 🚨 Date and Data validation check for the current calendar year
             const today = new Date();
             const currentYear = today.getFullYear();
             const isDec31 = today.getMonth() === 11 && today.getDate() === 31;
@@ -76,7 +78,6 @@ export default function YearEndAllocationChart() {
                 v.valuation_date.startsWith(`${currentYear}-12-31`)
             );
 
-            // Filter out the current year row if it is not Dec 31st or if data for Dec 31st doesn't exist
             const chartDataWithTotals = result.chartData
                 .filter((row) => {
                     const rowLabel = String(row.label);
@@ -112,6 +113,22 @@ export default function YearEndAllocationChart() {
     useEffect(() => {
         getUserSettings().then((prefs) => { if (prefs.locale) setLocale(prefs.locale); });
     }, []);
+
+    // Explicitly track container width and height when it paints on screen
+    useEffect(() => {
+        if (!containerRef.current) return;
+
+        const observer = new ResizeObserver((entries) => {
+            if (!entries || entries.length === 0) return;
+            const { width, height } = entries[0].contentRect;
+            if (width > 0 && height > 0) {
+                setDimensions({ width, height });
+            }
+        });
+
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, [loading]); // Re-observe right after loading finishes
 
     return (
         <Card className="shadow-sm">
@@ -160,18 +177,31 @@ export default function YearEndAllocationChart() {
                         Add valuation checkpoints in the transactional ledger to populate this chart.
                     </div>
                 ) : (
-                    <div className="h-80 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            {chartVariant === "bar" ? (
-                                <BarChart data={chartData} margin={{ top: 20, right: 8, left: 0, bottom: 0 }}>
+                    /* The container ref records layout changes */
+                    <div ref={containerRef} className="h-80 w-full">
+                        {dimensions && (
+                            chartVariant === "bar" ? (
+                                <BarChart
+                                    width={dimensions.width}
+                                    height={dimensions.height}
+                                    data={chartData}
+                                    margin={{ top: 20, right: 8, left: 0, bottom: 0 }}
+                                >
                                     <CartesianGrid strokeDasharray="3 3" opacity={0.2} vertical={false} />
-                                    <XAxis dataKey="label" tickLine={false} axisLine={false} className="text-xs"
-                                        tickFormatter={(label) => String(label).slice(-4)} />
+                                    <XAxis
+                                        dataKey="label"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        className="text-xs"
+                                        style={{ fontSize: 10 }}
+                                        tickFormatter={(label) => String(label).slice(-4)}
+                                    />
                                     <YAxis
                                         tickFormatter={(value) => formatCompact(Number(value), locale)}
                                         tickLine={false}
                                         axisLine={false}
                                         className="text-xs"
+                                        style={{ fontSize: 10 }}
                                     />
                                     <Tooltip
                                         content={({ active, payload, label }) => {
@@ -222,18 +252,27 @@ export default function YearEndAllocationChart() {
                                     ))}
                                 </BarChart>
                             ) : (
-                                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                                <AreaChart
+                                    width={dimensions.width}
+                                    height={dimensions.height}
+                                    data={chartData}
+                                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                                >
                                     <CartesianGrid strokeDasharray="3 3" opacity={0.2} vertical={false} />
-                                    <XAxis dataKey="label" tickLine={false} axisLine={false} className="text-xs"
-                                        tickFormatter={(label) => String(label).slice(-4)}
-                                    />
-                                    <YAxis
-                                        tickFormatter={(value) =>
-                                            formatCompact(Number(value), locale)
-                                        }
+                                    <XAxis
+                                        dataKey="label"
                                         tickLine={false}
                                         axisLine={false}
                                         className="text-xs"
+                                        style={{ fontSize: 10 }}
+                                        tickFormatter={(label) => String(label).slice(-4)}
+                                    />
+                                    <YAxis
+                                        tickFormatter={(value) => formatCompact(Number(value), locale)}
+                                        tickLine={false}
+                                        axisLine={false}
+                                        className="text-xs"
+                                        style={{ fontSize: 10 }}
                                     />
                                     <Tooltip
                                         content={({ active, payload, label }) => {
@@ -263,8 +302,8 @@ export default function YearEndAllocationChart() {
                                         />
                                     ))}
                                 </AreaChart>
-                            )}
-                        </ResponsiveContainer>
+                            )
+                        )}
                     </div>
                 )}
             </CardContent>

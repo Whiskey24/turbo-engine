@@ -214,40 +214,38 @@ export default function DashboardAnalyticsPage() {
                                 Add valuation checkpoints inside the transactional ledger to generate data visualization layers.
                             </div>
                         ) : (
-                            <div className="w-full h-96">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={chartData}
-                                            dataKey="value"
-                                            nameKey="name"
-                                            cx="50%"
-                                            cy="50%"
-                                            outerRadius={130}
-                                            paddingAngle={2}
-                                        >
-                                            {chartData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip
-                                            content={({ active, payload }) => {
-                                                if (!active || !payload || payload.length === 0) return null;
-                                                const d = payload[0];
-                                                const value = d.value as number;
-                                                const percentage = ((value / totalPortfolioValue) * 100).toFixed(1);
-                                                return (
-                                                    <div className="bg-card border rounded-lg p-3 text-xs shadow-md space-y-1">
-                                                        <p className="font-semibold text-foreground">{d.name}</p>
-                                                        <p className="text-muted-foreground">
-                                                            {percentage}% &middot; {formatEuro(value, locale)}
-                                                        </p>
-                                                    </div>
-                                                );
-                                            }}
-                                        />
-                                    </PieChart>
-                                </ResponsiveContainer>
+                            <div className="w-full h-96 flex items-center justify-center">
+                                <PieChart width={384} height={384}>
+                                    <Pie
+                                        data={chartData}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        cx="50%"
+                                        cy="50%"
+                                        outerRadius={130}
+                                        paddingAngle={2}
+                                    >
+                                        {chartData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip
+                                        content={({ active, payload }) => {
+                                            if (!active || !payload || payload.length === 0) return null;
+                                            const d = payload[0];
+                                            const value = d.value as number;
+                                            const percentage = ((value / totalPortfolioValue) * 100).toFixed(1);
+                                            return (
+                                                <div className="bg-card border rounded-lg p-3 text-xs shadow-md space-y-1">
+                                                    <p className="font-semibold text-foreground">{d.name}</p>
+                                                    <p className="text-muted-foreground">
+                                                        {percentage}% &middot; {formatEuro(value, locale)}
+                                                    </p>
+                                                </div>
+                                            );
+                                        }}
+                                    />
+                                </PieChart>
                             </div>
                         )}
                     </CardContent>
