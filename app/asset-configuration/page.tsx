@@ -246,6 +246,7 @@ export default function AssetConfigurationPage() {
             isin: reqs.shows_isin ? (isin.toUpperCase() || null) : null,
             ...buildBondPayload(assetSlug, nominalValue, couponRate, couponFrequency, maturityDate, firstCouponDate, dayCountBasis),
         }]);
+        setLoadingAsset(true); // reset state loader
         setLoadingAsset(false);
         if (!error) { resetCreateForm(); fetchData(); }
         else alert(`Error registering asset: ${error.message}`);
@@ -345,99 +346,6 @@ export default function AssetConfigurationPage() {
     const toggleType = (id: string) => setSelectedTypes((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
     const toggleAll = () => setSelectedTypes(allSelected ? new Set() : new Set(types.map((t) => t.id)));
     const filteredAssets = sortedAssets.filter((a) => selectedTypes.has(a.type_id));
-
-    // -----------------------------------------------------------------------
-    // Reusable sub-components
-    // -----------------------------------------------------------------------
-
-    const SlugSelector = ({ value, onChange, required }: { value: string; onChange: (v: string) => void; required?: boolean }) => (
-        <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Asset classification</label>
-            <select value={value} onChange={(e) => onChange(e.target.value)}
-                className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full" required={required}>
-                <option value="" disabled>-- Select a classification --</option>
-                {ASSET_TYPE_SLUGS.map((slug) => <option key={slug} value={slug}>{ASSET_TYPE_LABELS[slug]}</option>)}
-            </select>
-        </div>
-    );
-
-    const SlugRequirementsPreview = ({ reqs }: { reqs: SlugRequirements }) => {
-        const lines: string[] = [];
-        if (reqs.requires_iban) lines.push("Requires IBAN");
-        if (reqs.shows_ticker) lines.push(`Ticker symbol ${reqs.requires_ticker ? "(required)" : "(optional)"}`);
-        if (reqs.shows_isin) lines.push(`ISIN ${reqs.requires_isin ? "(required)" : "(optional)"}`);
-        if (reqs.is_bond) lines.push("Nominal value, coupon rate, frequency, maturity date (required)", "First coupon date, day-count basis (optional)");
-        if (lines.length === 0) return <p className="text-xs text-muted-foreground italic">None — no additional parameters required.</p>;
-        return (
-            <div className="grid grid-cols-1 gap-2">
-                {lines.map((l) => (
-                    <div key={l} className="flex items-center gap-2.5 text-sm font-normal">
-                        <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" /><span>{l}</span>
-                    </div>
-                ))}
-            </div>
-        );
-    };
-
-    // Bond-specific fields block — reused in both create and edit forms
-    const BondFields = ({
-        nomVal, setNomVal, cRate, setCRate, cFreq, setCFreq,
-        mDate, setMDate, fcDate, setFcDate, dcBasis, setDcBasis,
-        required = false,
-    }: {
-        nomVal: string; setNomVal: (v: string) => void;
-        cRate: string; setCRate: (v: string) => void;
-        cFreq: string; setCFreq: (v: string) => void;
-        mDate: string; setMDate: (v: string) => void;
-        fcDate: string; setFcDate: (v: string) => void;
-        dcBasis: string; setDcBasis: (v: string) => void;
-        required?: boolean;
-    }) => (
-        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 border rounded-md p-4 bg-muted/30">
-            <p className="md:col-span-2 text-xs font-semibold text-muted-foreground -mb-2">Bond Parameters</p>
-
-            <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Nominal Value (face value per bond)</label>
-                <input type="number" min="0" step="0.01" value={nomVal} onChange={(e) => setNomVal(e.target.value)}
-                    placeholder="e.g. 1000" className="border rounded-md p-2 bg-background text-sm" required={required} />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Annual Coupon Rate (%)</label>
-                <input type="number" min="0" max="100" step="0.001" value={cRate} onChange={(e) => setCRate(e.target.value)}
-                    placeholder="e.g. 4.5" className="border rounded-md p-2 bg-background text-sm" required={required} />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Coupon Frequency</label>
-                <select value={cFreq} onChange={(e) => setCFreq(e.target.value)}
-                    className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" required={required}>
-                    <option value="" disabled>-- Select frequency --</option>
-                    {COUPON_FREQUENCIES.map((f) => <option key={f} value={f}>{COUPON_FREQUENCY_LABELS[f]}</option>)}
-                </select>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Maturity Date</label>
-                <input type="date" value={mDate} onChange={(e) => setMDate(e.target.value)}
-                    className="border rounded-md p-2 bg-background text-sm" required={required} />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">First Coupon Date <span className="font-normal text-muted-foreground">(optional)</span></label>
-                <input type="date" value={fcDate} onChange={(e) => setFcDate(e.target.value)}
-                    className="border rounded-md p-2 bg-background text-sm" />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Day-Count Basis <span className="font-normal text-muted-foreground">(optional)</span></label>
-                <select value={dcBasis} onChange={(e) => setDcBasis(e.target.value)}
-                    className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                    {DAY_COUNT_BASES.map((b) => <option key={b} value={b}>{b}</option>)}
-                </select>
-            </div>
-        </div>
-    );
 
     // -----------------------------------------------------------------------
     // Render
@@ -873,3 +781,121 @@ export default function AssetConfigurationPage() {
         </div>
     );
 }
+
+// -----------------------------------------------------------------------
+// Reusable sub-components (Moved OUTSIDE global layout constructor)
+// -----------------------------------------------------------------------
+
+const SlugSelector = ({ value, onChange, required }: { value: string; onChange: (v: string) => void; required?: boolean }) => (
+    <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Asset classification</label>
+        <select value={value} onChange={(e) => onChange(e.target.value)}
+            className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full" required={required}>
+            <option value="" disabled>-- Select a classification --</option>
+            {ASSET_TYPE_SLUGS.map((slug) => <option key={slug} value={slug}>{ASSET_TYPE_LABELS[slug]}</option>)}
+        </select>
+    </div>
+);
+
+const SlugRequirementsPreview = ({ reqs }: { reqs: SlugRequirements }) => {
+    const lines: string[] = [];
+    if (reqs.requires_iban) lines.push("Requires IBAN");
+    if (reqs.shows_ticker) lines.push(`Ticker symbol ${reqs.requires_ticker ? "(required)" : "(optional)"}`);
+    if (reqs.shows_isin) lines.push(`ISIN ${reqs.requires_isin ? "(required)" : "(optional)"}`);
+    if (reqs.is_bond) lines.push("Nominal value, coupon rate, frequency, maturity date (required)", "First coupon date, day-count basis (optional)");
+    if (lines.length === 0) return <p className="text-xs text-muted-foreground italic">None — no additional parameters required.</p>;
+    return (
+        <div className="grid grid-cols-1 gap-2">
+            {lines.map((l) => (
+                <div key={l} className="flex items-center gap-2.5 text-sm font-normal">
+                    <span className="h-3 w-3 rounded-full bg-primary/60 shrink-0" /><span>{l}</span>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+const BondFields = ({
+    nomVal, setNomVal, cRate, setCRate, cFreq, setCFreq,
+    mDate, setMDate, fcDate, setFcDate, dcBasis, setDcBasis,
+    required = false,
+}: {
+    nomVal: string; setNomVal: (v: string) => void;
+    cRate: string; setCRate: (v: string) => void;
+    cFreq: string; setCFreq: (v: string) => void;
+    mDate: string; setMDate: (v: string) => void;
+    fcDate: string; setFcDate: (v: string) => void;
+    dcBasis: string; setDcBasis: (v: string) => void;
+    required?: boolean;
+}) => (
+    <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 border rounded-md p-4 bg-muted/30">
+        <p className="md:col-span-2 text-xs font-semibold text-muted-foreground -mb-2">Bond Parameters</p>
+
+        {/* Nominal Value */}
+        <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Nominal Value (face value per bond)</label>
+            <input
+                type="text"
+                inputMode="decimal"
+                value={nomVal}
+                onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                        setNomVal(val);
+                    }
+                }}
+                placeholder="e.g. 1000"
+                className="border rounded-md p-2 bg-background text-sm"
+                required={required}
+            />
+        </div>
+
+        {/* Annual Coupon Rate */}
+        <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Annual Coupon Rate (%)</label>
+            <input
+                type="text"
+                inputMode="decimal"
+                value={cRate}
+                onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                        setCRate(val);
+                    }
+                }}
+                placeholder="e.g. 4.5"
+                className="border rounded-md p-2 bg-background text-sm"
+                required={required}
+            />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Coupon Frequency</label>
+            <select value={cFreq} onChange={(e) => setCFreq(e.target.value)}
+                className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" required={required}>
+                <option value="" disabled>-- Select frequency --</option>
+                {COUPON_FREQUENCIES.map((f) => <option key={f} value={f}>{COUPON_FREQUENCY_LABELS[f]}</option>)}
+            </select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Maturity Date</label>
+            <input type="date" value={mDate} onChange={(e) => setMDate(e.target.value)}
+                className="border rounded-md p-2 bg-background text-sm" required={required} />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">First Coupon Date <span className="font-normal text-muted-foreground">(optional)</span></label>
+            <input type="date" value={fcDate} onChange={(e) => setFcDate(e.target.value)}
+                className="border rounded-md p-2 bg-background text-sm" />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Day-Count Basis <span className="font-normal text-muted-foreground">(optional)</span></label>
+            <select value={dcBasis} onChange={(e) => setDcBasis(e.target.value)}
+                className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                {DAY_COUNT_BASES.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+        </div>
+    </div>
+);
