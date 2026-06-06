@@ -145,6 +145,7 @@ export async function hasPortfolioData(): Promise<boolean> {
 
 export interface UserPreferences {
     locale?: string;
+    theme?: string;
 }
 
 export async function getUserSettings(): Promise<UserPreferences> {

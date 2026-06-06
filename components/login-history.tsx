@@ -5,6 +5,7 @@ import { Tables } from "@/lib/database.types";
 import { supabase } from "@/lib/supabase";
 import { parseUserAgent } from "@/lib/user-agent-utils";
 import { getUserSettings } from "@/lib/database";
+import { ExternalLink } from "lucide-react"; // Imported for consistent UI iconography
 
 export default function LoginHistory() {
   const [logins, setLogins] = useState<Tables<"login_history">[]>([]);
@@ -44,49 +45,65 @@ export default function LoginHistory() {
   }, []);
 
   if (loading) {
-    return <div className="text-center py-4">Loading login history...</div>;
+    return (
+      <div className="border border-dashed rounded-xl h-24 flex items-center justify-center text-muted-foreground text-xs bg-card animate-pulse">
+        Loading login history metrics...
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="text-center text-red-500 py-4">{error}</div>;
+    return (
+      <div className="border border-destructive/30 rounded-xl h-24 flex items-center justify-center text-destructive text-xs bg-destructive/10 font-medium">
+        Error: {error}
+      </div>
+    );
   }
 
   if (logins.length === 0) {
-    return <div className="text-center py-4">No login history found</div>;
+    return (
+      <div className="border border-dashed rounded-xl h-24 flex items-center justify-center text-muted-foreground text-xs bg-card">
+        No registered login session entries recorded.
+      </div>
+    );
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+    <div className="border rounded-md bg-card shadow-sm overflow-x-auto">
+      <table className="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr className="bg-muted/60 border-b text-muted-foreground font-medium select-none">
+            <th className="p-3 font-medium text-muted-foreground w-1/3">
               Date & Time
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Device
+            <th className="p-3 font-medium text-muted-foreground w-1/3">
+              Authentication Device
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              IP Address
+            <th className="p-3 font-medium text-muted-foreground w-1/3">
+              IP Network Target
             </th>
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="divide-y divide-border">
           {logins.map((login) => {
-            // 🚨 Clean the IP address by splitting off any CIDR notation (e.g., "192.168.1.1/32" -> "192.168.1.1")
+            // Clean the IP address by splitting off any CIDR block strings (e.g., "192.168.1.1/32" -> "192.168.1.1")
             const cleanIp = login.ip_address ? login.ip_address.split('/')[0].trim() : "";
 
             return (
-              <tr key={login.id}>
-                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+              <tr key={login.id} className="hover:bg-muted/30 transition-colors">
+                {/* Date & Time Column: Styled like primary Asset column anchor */}
+                <td className="p-3 font-semibold text-foreground">
                   {new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "short" }).format(new Date(login.login_at))}
                 </td>
-                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+
+                {/* Device Column */}
+                <td className="p-3 text-muted-foreground">
                   {parseUserAgent(login.user_agent)}
                 </td>
-                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+
+                {/* IP Address Column: Styled with clean monospaced tech typography */}
+                <td className="p-3 font-mono text-[11px] text-muted-foreground">
                   <div className="flex items-center gap-2">
-                    {/* Display the original IP string as recorded in the database */}
                     <span>{login.ip_address || "Unknown"}</span>
 
                     {cleanIp && login.ip_address !== "Unknown" && (
@@ -94,18 +111,10 @@ export default function LoginHistory() {
                         href={`https://whatismyipaddress.com/ip/${cleanIp}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-gray-400 hover:text-blue-500 transition-colors duration-150"
-                        title={`Lookup IP details for ${cleanIp}`}
+                        className="text-muted-foreground/60 hover:text-primary transition-colors"
+                        title={`Lookup geo-IP mapping for ${cleanIp}`}
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                          className="w-4 h-4"
-                        >
-                          <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                          <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                        </svg>
+                        <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     )}
                   </div>

@@ -40,11 +40,11 @@ export default function SettingsPage() {
         {/* Responsive 2-column grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 space-y-0">
 
-          {/* Locale & Formatting */}
+          {/* Appearance & Localization */}
           <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm">
-            <h2 className="text-lg font-semibold mb-2">Locale & Formatting</h2>
+            <h2 className="text-lg font-semibold mb-2">Appearance & Localization</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Set your preferred language and number format
+              Set your preferred interface theme, languages, and core numerical configuration formats.
             </p>
             <LocaleSettings />
           </div>

@@ -14,17 +14,44 @@ const LOCALE_OPTIONS = [
     { value: "pt-BR", label: "Portuguese (Brazil)" },
 ];
 
+const THEME_OPTIONS = [
+    { value: "light", label: "Light Mode" },
+    { value: "dark", label: "Dark Mode" },
+];
+
 export default function LocaleSettings() {
     const [locale, setLocale] = useState<string>("");
+    const [theme, setTheme] = useState<string>("light"); // ← New state for theme tracker
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Helper utility to sync the HTML root class with the state entry
+    const applyThemeToDOM = (targetTheme: string) => {
+        if (typeof window !== "undefined") {
+            if (targetTheme === "dark") {
+                document.documentElement.classList.add("dark");
+            } else {
+                document.documentElement.classList.remove("dark");
+            }
+        }
+    };
+
     useEffect(() => {
         getUserSettings()
-            .then((prefs) => setLocale(prefs.locale ?? "en-US"))
-            .catch(() => setLocale("en-US"))
+            .then((prefs) => {
+                const fetchedLocale = prefs.locale ?? "en-US";
+                const fetchedTheme = prefs.theme ?? "light";
+
+                setLocale(fetchedLocale);
+                setTheme(fetchedTheme);
+                applyThemeToDOM(fetchedTheme);
+            })
+            .catch(() => {
+                setLocale("en-US");
+                setTheme("light");
+            })
             .finally(() => setLoading(false));
     }, []);
 
@@ -33,11 +60,14 @@ export default function LocaleSettings() {
         setError(null);
         setSaved(false);
         try {
-            await upsertUserSettings({ locale });
+            // Save both configuration items simultaneously inside preferences JSON payload
+            await upsertUserSettings({ locale, theme });
+            applyThemeToDOM(theme);
+
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
         } catch {
-            setError("Failed to save. Please try again.");
+            setError("Failed to save preferences. Please try again.");
         } finally {
             setSaving(false);
         }
@@ -48,7 +78,8 @@ export default function LocaleSettings() {
     }
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-4">
+            {/* Locale Dropdown */}
             <div>
                 <label htmlFor="locale-select" className="text-sm font-medium">
                     Display locale
@@ -80,15 +111,39 @@ export default function LocaleSettings() {
                 </p>
             )}
 
-            <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-                {saving ? "Saving…" : "Save"}
-            </button>
+            {/* Dark Mode Dropdown */}
+            <div>
+                <label htmlFor="theme-select" className="text-sm font-medium">
+                    Interface Theme
+                </label>
+                <p className="text-xs text-muted-foreground mb-2">
+                    Select your preferred visual layout appearance.
+                </p>
+                <select
+                    id="theme-select"
+                    value={theme}
+                    onChange={(e) => setTheme(e.target.value)}
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                >
+                    {THEME_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </option>
+                    ))}
+                </select>
+            </div>
 
-            {saved && <p className="text-sm text-green-600">Saved!</p>}
+            <div className="pt-1">
+                <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                    {saving ? "Saving…" : "Save Preferences"}
+                </button>
+            </div>
+
+            {saved && <p className="text-sm text-green-600">Preferences saved successfully!</p>}
             {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
     );
