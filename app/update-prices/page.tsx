@@ -18,6 +18,7 @@ interface EnhancedAssetItem {
     last_price: number | null;
     last_price_date: string | null;
     currency: string;
+    nominal_value?: number | null; // Fixed baseline face value for bonds
 }
 
 const TARGET_TYPES = ["STOCK", "CRYPTO", "FUND_ETF", "BOND"];
@@ -46,14 +47,20 @@ export default function UpdatePricesPage() {
     const [selectedType, setSelectedType] = useState<string>("ALL");
     const [filterActiveOnly, setFilterActiveOnly] = useState(false);
 
-    // Update Modal/Form Inline States
-    const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
-    const [inputPrice, setInputPrice] = useState("");
-    const [inputDate, setInputDate] = useState(() => {
+    // Overlay Modal Managed States
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [activeAsset, setActiveAsset] = useState<EnhancedAssetItem | null>(null);
+    const [modalPrice, setModalPrice] = useState("");
+    const [modalPercentage, setModalPercentage] = useState("");
+
+    // Fixed Nominal Value state (defaults to 100 if missing from asset configuration)
+    const [fixedNominal, setFixedNominal] = useState(100);
+
+    const [modalDate, setModalDate] = useState(() => {
         const today = new Date();
         return today.toISOString().split("T")[0];
     });
-    const [submittingId, setSubmittingId] = useState<string | null>(null);
+    const [submitting, setSubmitting] = useState(false);
 
     async function loadPriceMatrix() {
         try {
@@ -68,21 +75,20 @@ export default function UpdatePricesPage() {
 
             if (assetErr) throw assetErr;
 
-            // 2. Fetch inventory status from tax lots to evaluate current holdings
+            // 2. Fetch inventory status from tax lots to evaluate active holdings
             const { data: rawLots, error: lotErr } = await supabase
                 .from("tax_lots")
                 .select("asset_id, quantity_remaining");
 
             if (lotErr) throw lotErr;
 
-            // Map active holdings (quantity_remaining > 0)
             const activeAssetIds = new Set<string>(
                 (rawLots || [])
                     .filter((lot) => lot.quantity_remaining > 0)
                     .map((lot) => lot.asset_id)
             );
 
-            // 3. Fetch price history sorted by latest entry to pull current ticker baseline
+            // 3. Fetch price history sorted by latest entry to pull current pricing benchmarks
             const { data: rawPrices, error: priceErr } = await supabase
                 .from("asset_prices")
                 .select("asset_id, price, price_date, currency")
@@ -90,7 +96,6 @@ export default function UpdatePricesPage() {
 
             if (priceErr) throw priceErr;
 
-            // Map unique historical prices to pick out the absolute latest date row per asset index
             const latestPriceMap = new Map<string, PriceRow>();
             (rawPrices || []).forEach((p) => {
                 if (!latestPriceMap.has(p.asset_id)) {
@@ -99,7 +104,7 @@ export default function UpdatePricesPage() {
             });
 
             // 4. Assemble matrix
-            const parsedItems: EnhancedAssetItem[] = (rawAssets || []).map((asset) => {
+            const parsedItems: EnhancedAssetItem[] = (rawAssets || []).map((asset: any) => {
                 const matchingPriceRecord = latestPriceMap.get(asset.id);
                 return {
                     id: asset.id,
@@ -112,6 +117,7 @@ export default function UpdatePricesPage() {
                     last_price: matchingPriceRecord ? matchingPriceRecord.price : null,
                     last_price_date: matchingPriceRecord ? matchingPriceRecord.price_date : null,
                     currency: matchingPriceRecord ? matchingPriceRecord.currency : "EUR",
+                    nominal_value: asset.nominal_value ?? null,
                 };
             });
 
@@ -128,56 +134,114 @@ export default function UpdatePricesPage() {
         loadPriceMatrix();
     }, []);
 
-    const handleOpenUpdateInline = (item: EnhancedAssetItem) => {
-        setEditingAssetId(item.id);
-        setInputPrice(item.last_price !== null ? item.last_price.toString() : "");
+    // Open Overlay Handler
+    const handleOpenModal = (item: EnhancedAssetItem) => {
+        setActiveAsset(item);
+        const currentPrice = item.last_price !== null ? item.last_price.toString() : "";
+        setModalPrice(currentPrice);
+
+        // Assign fixed nominal configuration (defaults to 100 if null/unconfigured)
+        const nominalValue = item.nominal_value ? item.nominal_value : 100;
+        setFixedNominal(nominalValue);
+
+        // Calculate initial bond quote percentage if applicable
+        if (item.type_slug === "BOND" && item.last_price !== null && nominalValue > 0) {
+            setModalPercentage(((item.last_price / nominalValue) * 100).toString());
+        } else {
+            setModalPercentage("");
+        }
+
+        // Default date input back to present day
+        const today = new Date();
+        setModalDate(today.toISOString().split("T")[0]);
+        setIsModalOpen(true);
     };
 
-    const handleCancelInline = () => {
-        setEditingAssetId(null);
-        setInputPrice("");
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setActiveAsset(null);
+        setModalPrice("");
+        setModalPercentage("");
+        setFixedNominal(100);
     };
 
-    const handleSubmitPrice = async (item: EnhancedAssetItem) => {
-        const parsedPrice = parseFloat(inputPrice);
+    // Cross-linked calculation helpers using fixedNominal
+    const handlePriceChange = (val: string) => {
+        setModalPrice(val);
+        const numPrice = parseFloat(val);
+
+        if (activeAsset?.type_slug === "BOND" && fixedNominal > 0) {
+            if (!isNaN(numPrice)) {
+                // Price changed -> automatically recalculate percentage of nominal value
+                setModalPercentage(((numPrice / fixedNominal) * 100).toString());
+            } else {
+                setModalPercentage("");
+            }
+        }
+    };
+
+    const handlePercentageChange = (val: string) => {
+        setModalPercentage(val);
+        const numPct = parseFloat(val);
+
+        if (activeAsset?.type_slug === "BOND" && fixedNominal > 0) {
+            if (!isNaN(numPct)) {
+                // Percentage changed -> automatically recalculate absolute price
+                setModalPrice(((fixedNominal * numPct) / 100).toString());
+            } else {
+                setModalPrice("");
+            }
+        }
+    };
+
+    // Submit Overlay Action
+    const handleSubmitPrice = async () => {
+        if (!activeAsset) return;
+
+        const parsedPrice = parseFloat(modalPrice);
         if (isNaN(parsedPrice) || parsedPrice < 0) {
             alert("Please configure a valid numerical price entry.");
             return;
         }
 
         try {
-            setSubmittingId(item.id);
+            setSubmitting(true);
 
-            const { error: insertErr } = await supabase
+            // Upsert transaction utilizing composite primary keys or index combinations
+            const { error: upsertErr } = await supabase
                 .from("asset_prices")
-                .insert({
-                    asset_id: item.id,
-                    price: parsedPrice,
-                    price_date: inputDate,
-                    currency: item.currency,
-                    source: "MANUAL",
-                });
+                .upsert(
+                    {
+                        asset_id: activeAsset.id,
+                        price: parsedPrice,
+                        price_date: modalDate,
+                        currency: activeAsset.currency,
+                        source: "MANUAL",
+                    },
+                    { onConflict: "asset_id,price_date" }
+                );
 
-            if (insertErr) throw insertErr;
+            if (upsertErr) throw upsertErr;
 
-            // Sync data changes back to layout locally
+            // Sync parameters locally back into the listings matrix
             setAssets((prev) =>
                 prev.map((asset) =>
-                    asset.id === item.id
-                        ? { ...asset, last_price: parsedPrice, last_price_date: inputDate }
+                    asset.id === activeAsset.id
+                        ? { ...asset, last_price: parsedPrice, last_price_date: modalDate }
                         : asset
                 )
             );
-            setEditingAssetId(null);
+
+            handleCloseModal();
         } catch (err: any) {
-            console.error("Insert price action failure:", err);
+            console.error("Upsert price action failure:", err);
             alert(`Could not log price update: ${err.message}`);
         } finally {
-            setSubmittingId(null);
+            setSubmitting(false);
         }
     };
 
-    // List processing pipelines
+    // Filter pipelines
     const filteredAssets = assets.filter((item) => {
         const matchesSearch =
             item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -205,22 +269,22 @@ export default function UpdatePricesPage() {
         <div className="min-h-screen bg-background text-foreground p-6 sm:p-8">
             <div className="max-w-7xl mx-auto space-y-6">
 
-                {/* Top Content Row */}
+                {/* Header Context Row */}
                 <div className="border-b border-border pb-5">
                     <h1 className="text-2xl font-bold tracking-tight">Asset Price Manager</h1>
                     <p className="text-xs text-muted-foreground mt-1">
-                        Log raw historical prices into <span className="font-mono bg-muted px-1 py-0.5 rounded text-foreground">asset_prices</span> to maintain unrealized portfolio sub-ledger valuation accuracy.
+                        Log raw historical prices into <span className="font-mono bg-muted px-1 py-0.5 rounded text-foreground">asset_prices</span> to maintain valuation accuracy.
                     </p>
                 </div>
 
-                {/* Messaging Interface */}
+                {/* Error Notifications */}
                 {error && (
                     <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg p-4 text-xs text-red-600 dark:text-red-400 font-medium">
                         {error}
                     </div>
                 )}
 
-                {/* Parameter Filtering Bar */}
+                {/* Filter Bar */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-card border border-border rounded-xl p-4">
                     <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Search Matrix</label>
@@ -268,7 +332,7 @@ export default function UpdatePricesPage() {
                     </div>
                 </div>
 
-                {/* Data Output Matrix */}
+                {/* Main Grid Table Container */}
                 <div className="bg-card border border-border rounded-xl overflow-hidden shadow-xl">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse text-xs sm:text-sm">
@@ -279,7 +343,7 @@ export default function UpdatePricesPage() {
                                     <th className="p-4 font-semibold">Holding Status</th>
                                     <th className="p-4 text-right font-semibold">Last Recorded Price</th>
                                     <th className="p-4 text-right font-semibold">Last Verified Date</th>
-                                    <th className="p-4 text-center font-semibold max-w-[240px]">Modify Pricing Ticker</th>
+                                    <th className="p-4 text-right font-semibold">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border bg-card">
@@ -290,114 +354,208 @@ export default function UpdatePricesPage() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredAssets.map((item) => {
-                                        const isEditing = editingAssetId === item.id;
-                                        return (
-                                            <tr key={item.id} className="hover:bg-muted/40 transition">
-                                                {/* Identity */}
-                                                <td className="p-4">
-                                                    <div className="font-semibold text-foreground">{item.name}</div>
-                                                    <div className="text-muted-foreground font-mono text-[11px] mt-0.5 flex items-center gap-1.5">
-                                                        {item.ticker ? <span>{item.ticker}</span> : <span className="italic text-muted-foreground/60">No Ticker</span>}
-                                                        {item.isin && <span className="text-muted-foreground/60">• {item.isin}</span>}
-                                                        <span className="text-muted-foreground/60">• {item.institution}</span>
+                                    filteredAssets.map((item) => (
+                                        <tr key={item.id} className="hover:bg-muted/40 transition">
+                                            <td className="p-4">
+                                                <div className="font-semibold text-foreground">{item.name}</div>
+                                                <div className="text-muted-foreground font-mono text-[11px] mt-0.5 flex items-center gap-1.5">
+                                                    {item.ticker ? <span>{item.ticker}</span> : <span className="italic text-muted-foreground/60">No Ticker</span>}
+                                                    {item.isin && <span className="text-muted-foreground/60">• {item.isin}</span>}
+                                                    <span className="text-muted-foreground/60">• {item.institution}</span>
+                                                </div>
+                                            </td>
+
+                                            <td className="p-4 whitespace-nowrap">
+                                                <span className={`text-[10px] uppercase font-bold tracking-wide border px-2 py-0.5 rounded ${TYPE_BADGES[item.type_slug]}`}>
+                                                    {TYPE_LABELS[item.type_slug]}
+                                                </span>
+                                            </td>
+
+                                            <td className="p-4 whitespace-nowrap">
+                                                {item.has_active_holding ? (
+                                                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium text-xs">
+                                                        <span className="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse"></span>
+                                                        Active Position
                                                     </div>
-                                                </td>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5 text-muted-foreground/60 text-xs">
+                                                        <span className="h-2 w-2 rounded-full bg-muted-foreground/30"></span>
+                                                        No Balance
+                                                    </div>
+                                                )}
+                                            </td>
 
-                                                {/* Class */}
-                                                <td className="p-4 whitespace-nowrap">
-                                                    <span className={`text-[10px] uppercase font-bold tracking-wide border px-2 py-0.5 rounded ${TYPE_BADGES[item.type_slug]}`}>
-                                                        {TYPE_LABELS[item.type_slug]}
-                                                    </span>
-                                                </td>
+                                            <td className="p-4 text-right font-mono text-foreground font-medium">
+                                                {item.last_price !== null
+                                                    ? new Intl.NumberFormat("en-US", {
+                                                        style: "currency",
+                                                        currency: item.currency,
+                                                        minimumFractionDigits: 2,
+                                                        maximumFractionDigits: 8
+                                                    }).format(item.last_price)
+                                                    : "—"}
+                                            </td>
 
-                                                {/* Holding Indicator */}
-                                                <td className="p-4 whitespace-nowrap">
-                                                    {item.has_active_holding ? (
-                                                        <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium text-xs">
-                                                            <span className="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse"></span>
-                                                            Active Position
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex items-center gap-1.5 text-muted-foreground/60 text-xs">
-                                                            <span className="h-2 w-2 rounded-full bg-muted-foreground/30"></span>
-                                                            No Balance
-                                                        </div>
-                                                    )}
-                                                </td>
+                                            <td className="p-4 text-right font-mono text-muted-foreground">
+                                                {item.last_price_date || "—"}
+                                            </td>
 
-                                                {/* Last Price */}
-                                                <td className="p-4 text-right font-mono text-foreground font-medium">
-                                                    {item.last_price !== null
-                                                        ? new Intl.NumberFormat("en-US", { style: "currency", currency: item.currency }).format(item.last_price)
-                                                        : "—"}
-                                                </td>
-
-                                                {/* Last Date */}
-                                                <td className="p-4 text-right font-mono text-muted-foreground">
-                                                    {item.last_price_date || "—"}
-                                                </td>
-
-                                                {/* Dynamic Controls Column */}
-                                                <td className="p-4 text-center max-w-[280px]">
-                                                    {isEditing ? (
-                                                        <div className="flex flex-col sm:flex-row items-center gap-2 justify-end">
-                                                            <div className="flex items-center bg-background border border-border rounded-md overflow-hidden w-full sm:w-auto">
-                                                                <span className="px-2 font-mono text-[11px] text-muted-foreground bg-muted border-r border-border h-full py-1">
-                                                                    {item.currency}
-                                                                </span>
-                                                                <input
-                                                                    type="number"
-                                                                    step="any"
-                                                                    placeholder="0.00"
-                                                                    value={inputPrice}
-                                                                    onChange={(e) => setInputPrice(e.target.value)}
-                                                                    className="bg-transparent text-xs font-mono text-foreground px-2 py-1 outline-none w-20"
-                                                                    autoFocus
-                                                                />
-                                                            </div>
-                                                            <input
-                                                                type="date"
-                                                                value={inputDate}
-                                                                onChange={(e) => setInputDate(e.target.value)}
-                                                                className="bg-background border border-border rounded-md text-[11px] font-mono text-foreground px-2 py-1 outline-none w-full sm:w-auto"
-                                                            />
-                                                            <div className="flex gap-1 w-full sm:w-auto justify-end">
-                                                                <button
-                                                                    onClick={() => handleSubmitPrice(item)}
-                                                                    disabled={submittingId === item.id}
-                                                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 disabled:opacity-50 text-white dark:text-slate-950 font-semibold text-xs rounded transition"
-                                                                >
-                                                                    {submittingId === item.id ? "..." : "Save"}
-                                                                </button>
-                                                                <button
-                                                                    onClick={handleCancelInline}
-                                                                    className="px-2 py-1 bg-muted hover:bg-muted/80 text-foreground text-xs rounded transition border border-border"
-                                                                >
-                                                                    X
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex justify-end">
-                                                            <button
-                                                                onClick={() => handleOpenUpdateInline(item)}
-                                                                className="px-3 py-1 bg-muted hover:bg-muted/80 hover:text-emerald-600 dark:hover:text-emerald-400 border border-border rounded text-xs font-medium transition"
-                                                            >
-                                                                Update Price
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
+                                            <td className="p-4 text-right">
+                                                <button
+                                                    onClick={() => handleOpenModal(item)}
+                                                    className="px-3 py-1 bg-muted hover:bg-muted/80 hover:text-emerald-600 dark:hover:text-emerald-400 border border-border rounded text-xs font-medium transition"
+                                                >
+                                                    Update Price
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
                                 )}
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
+
+            {/* High-Precision Price Update Overlay Modal */}
+            {isModalOpen && activeAsset && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-card border border-border rounded-xl max-w-lg w-full shadow-2xl overflow-hidden transform transition-all my-8">
+
+                        {/* Modal Header */}
+                        <div className="border-b border-border p-5 bg-muted/30">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <span className={`text-[9px] uppercase font-bold tracking-wider border px-2 py-0.5 rounded mb-2 inline-block ${TYPE_BADGES[activeAsset.type_slug]}`}>
+                                        {TYPE_LABELS[activeAsset.type_slug]}
+                                    </span>
+                                    <h3 className="text-base font-bold text-foreground tracking-tight">{activeAsset.name}</h3>
+                                    <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                                        {activeAsset.ticker || "No Ticker"} {activeAsset.isin ? `• ${activeAsset.isin}` : ""} • {activeAsset.institution}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleCloseModal}
+                                    className="p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Modal Form Content */}
+                        <div className="p-6 space-y-5">
+
+                            {/* Date Selector Container */}
+                            <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                                    Price Metric Valuation Date
+                                </label>
+                                <input
+                                    type="date"
+                                    value={modalDate}
+                                    onChange={(e) => setModalDate(e.target.value)}
+                                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono text-foreground outline-none focus:border-emerald-500 transition"
+                                />
+                            </div>
+
+                            {/* Linked Bond Input Metrics Layout */}
+                            {activeAsset.type_slug === "BOND" && (
+                                <div className="bg-muted/40 border border-border rounded-lg p-3.5 space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        <p className="text-[11px] font-medium text-muted-foreground">
+                                            Fixed Income Parameters
+                                        </p>
+                                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900/50 px-2 py-0.5 rounded">
+                                            Fixed Nominal Value: {new Intl.NumberFormat("en-US", {
+                                                style: "currency",
+                                                currency: activeAsset.currency,
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2
+                                            }).format(fixedNominal)}
+                                        </span>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] font-semibold text-muted-foreground mb-1">
+                                            Quote Percentage (%)
+                                        </label>
+                                        <div className="relative flex items-center bg-background border border-border rounded-lg overflow-hidden focus-within:border-emerald-500 transition">
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="0.00"
+                                                value={modalPercentage}
+                                                onChange={(e) => handlePercentageChange(e.target.value)}
+                                                className="w-full bg-transparent px-3 py-2 font-mono text-xs text-foreground outline-none"
+                                            />
+                                            <span className="bg-muted px-2.5 py-2 border-l border-border font-mono text-xs text-muted-foreground">%</span>
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground/60 mt-1 italic">
+                                            Adjusting either field below automatically recalculates the other based on the fixed nominal value.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Main Numerical Input Container */}
+                            <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                                    {activeAsset.type_slug === "BOND" ? "Absolute Price" : "Asset Price Entry"}
+                                </label>
+                                <div className="relative flex items-center bg-background border border-border rounded-lg overflow-hidden shadow-sm focus-within:border-emerald-500 transition">
+                                    <span className="bg-muted px-3 py-2.5 border-r border-border font-mono text-xs text-muted-foreground font-semibold">
+                                        {activeAsset.currency}
+                                    </span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        value={modalPrice}
+                                        onChange={(e) => handlePriceChange(e.target.value)}
+                                        className="w-full bg-transparent px-4 py-2.5 font-mono text-sm text-foreground placeholder-muted-foreground/40 outline-none"
+                                        autoFocus={activeAsset.type_slug !== "BOND"}
+                                    />
+                                </div>
+                                {activeAsset.type_slug === "CRYPTO" && (
+                                    <p className="text-[10px] text-muted-foreground/80 mt-1.5 italic">
+                                        Field allows deep sub-penny asset precision decimals for fractional cryptocurrency tokens.
+                                    </p>
+                                )}
+                            </div>
+
+                        </div>
+
+                        {/* Modal Action Footer */}
+                        <div className="border-t border-border p-4 bg-muted/20 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={handleCloseModal}
+                                disabled={submitting}
+                                className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground text-xs font-semibold rounded-lg transition border border-border disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSubmitPrice}
+                                disabled={submitting}
+                                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white dark:text-slate-950 text-xs font-bold rounded-lg shadow-md transition disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {submitting ? (
+                                    <>
+                                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+                                        Saving Changes...
+                                    </>
+                                ) : (
+                                    "Save Price"
+                                )}
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
