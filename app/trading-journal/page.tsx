@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Tables, TablesInsert } from "@/lib/database";
 
@@ -11,6 +11,7 @@ import type { Tables, TablesInsert } from "@/lib/database";
 type UnrealizedPnLRow = Tables<"unrealized_pnl">;
 type RealizedPnLRow = Tables<"realized_pnl">;
 type CurrentHoldingRow = Tables<"current_holdings">;
+type TaxLotRow = Tables<"tax_lots">;
 
 /** Minimal shape selected from portfolio_assets for the BUY asset dropdown. */
 interface TradableAsset {
@@ -649,6 +650,192 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
 }
 
 // ---------------------------------------------------------------------------
+// LotSubRows — renders the expandable lot breakdown inside the unrealized table
+// ---------------------------------------------------------------------------
+
+interface LotSubRowsProps {
+    lots: TaxLotRow[];
+    loading: boolean;
+    parent: UnrealizedPnLRow;
+    colSpan: number;
+    formatCurrency: (val: number, currency?: string) => string;
+    formatNumber: (val: number, decimals?: number) => string;
+    baseCurrency: string;
+}
+
+function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumber, baseCurrency }: LotSubRowsProps) {
+    const qtyDp = parent.asset_type === "CRYPTO" ? 6 : 4;
+
+    const cellCls = "px-3 py-2.5 text-right font-mono";
+
+    return (
+        <tr>
+            <td colSpan={colSpan} className="p-0 border-b border-border">
+                <div className="bg-muted/20 dark:bg-muted/10 border-l-4 border-emerald-500/40 dark:border-emerald-600/40">
+                    {loading ? (
+                        <div className="flex items-center gap-3 px-6 py-4">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                            <span className="text-xs text-muted-foreground">Loading lots…</span>
+                        </div>
+                    ) : lots.length === 0 ? (
+                        <p className="text-xs text-muted-foreground px-6 py-4">
+                            No open lots found for this asset.
+                        </p>
+                    ) : (
+                        <table className="w-full text-xs border-collapse">
+                            <thead>
+                                <tr className="text-muted-foreground border-b border-border/60">
+                                    {/* indent spacer to align with parent asset column */}
+                                    <th className="pl-10 pr-3 py-2 text-left font-semibold w-8">#</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Acquired</th>
+                                    <th className="px-3 py-2 text-right font-semibold">Age</th>
+                                    <th className="px-3 py-2 text-right font-semibold">Qty Remaining</th>
+                                    <th className="px-3 py-2 text-right font-semibold">Cost / Unit</th>
+                                    <th className="px-3 py-2 text-right font-semibold">Cost Basis</th>
+                                    <th className="px-3 py-2 text-right font-semibold">Current Value</th>
+                                    <th className="px-3 py-2 text-right font-semibold">Unrealized P&amp;L</th>
+                                    <th className="px-3 py-2 text-right font-semibold">P&amp;L %</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border/40">
+                                {lots.map((lot, idx) => {
+                                    const acquiredDate = new Date(lot.acquired_at);
+                                    const ageMs = Date.now() - acquiredDate.getTime();
+                                    const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+
+                                    // Per-lot P&L using current price from the parent unrealized row.
+                                    // current_price is in local currency; cost_per_unit_base is in base.
+                                    const currentPrice = parent.current_price;
+                                    const currentValue = currentPrice != null
+                                        ? lot.quantity_remaining * currentPrice * (1 / (lot.exchange_rate_at_acquisition || 1)) * (lot.exchange_rate_at_acquisition || 1)
+                                        : null;
+                                    // Simpler: use the exchange rates already baked into the parent view.
+                                    // current_value_base / quantity_held gives current price per unit in base.
+                                    const currentPriceBase = parent.quantity_held > 0 && parent.current_value_base != null
+                                        ? parent.current_value_base / parent.quantity_held
+                                        : null;
+                                    const lotCurrentValueBase = currentPriceBase != null
+                                        ? lot.quantity_remaining * currentPriceBase
+                                        : null;
+                                    const lotCostBasisBase = lot.quantity_remaining * lot.cost_per_unit_base;
+                                    const lotPnlBase = lotCurrentValueBase != null
+                                        ? lotCurrentValueBase - lotCostBasisBase
+                                        : null;
+                                    const lotPnlPct = lotPnlBase != null && lotCostBasisBase > 0
+                                        ? (lotPnlBase / lotCostBasisBase) * 100
+                                        : null;
+                                    const isPositive = (lotPnlBase ?? 0) >= 0;
+
+                                    return (
+                                        <tr key={lot.id} className="hover:bg-muted/30 transition">
+                                            <td className="pl-10 pr-3 py-2.5 text-muted-foreground font-semibold">
+                                                {idx + 1}
+                                            </td>
+                                            <td className="px-3 py-2.5">
+                                                <div className="text-foreground/80 font-medium">
+                                                    {acquiredDate.toLocaleDateString(undefined, {
+                                                        year: "numeric", month: "short", day: "numeric",
+                                                    })}
+                                                </div>
+                                                <div className="text-muted-foreground/70 text-[10px]">
+                                                    {acquiredDate.toLocaleTimeString(undefined, {
+                                                        hour: "2-digit", minute: "2-digit",
+                                                    })}
+                                                </div>
+                                            </td>
+                                            <td className={cellCls + " text-muted-foreground"}>
+                                                <span className={`inline-block px-1.5 py-0.5 rounded font-mono text-[10px] ${ageDays >= 365
+                                                        ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400"
+                                                        : "bg-muted text-muted-foreground"
+                                                    }`}>
+                                                    {ageDays >= 365
+                                                        ? `${(ageDays / 365).toFixed(1)}y`
+                                                        : `${ageDays}d`}
+                                                </span>
+                                            </td>
+                                            <td className={cellCls + " text-foreground/80"}>
+                                                {formatNumber(lot.quantity_remaining, qtyDp)}
+                                                {lot.quantity_remaining < lot.quantity_acquired && (
+                                                    <div className="text-[10px] text-muted-foreground/70 mt-0.5">
+                                                        of {formatNumber(lot.quantity_acquired, qtyDp)}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className={cellCls + " text-foreground/80"}>
+                                                {formatCurrency(lot.cost_per_unit, lot.currency)}
+                                                <div className="text-[10px] text-muted-foreground/70 mt-0.5">
+                                                    {formatCurrency(lot.cost_per_unit_base, baseCurrency)} base
+                                                </div>
+                                            </td>
+                                            <td className={cellCls + " text-muted-foreground"}>
+                                                {formatCurrency(lotCostBasisBase, baseCurrency)}
+                                            </td>
+                                            <td className={cellCls + " text-foreground/80"}>
+                                                {lotCurrentValueBase != null
+                                                    ? formatCurrency(lotCurrentValueBase, baseCurrency)
+                                                    : <span className="text-muted-foreground/60">—</span>
+                                                }
+                                            </td>
+                                            <td className={`${cellCls} font-semibold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                                {lotPnlBase != null
+                                                    ? `${isPositive ? "+" : ""}${formatCurrency(lotPnlBase, baseCurrency)}`
+                                                    : <span className="text-muted-foreground/60">—</span>
+                                                }
+                                            </td>
+                                            <td className={`${cellCls} font-bold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                                {lotPnlPct != null
+                                                    ? `${lotPnlPct >= 0 ? "+" : ""}${formatNumber(lotPnlPct)}%`
+                                                    : <span className="text-muted-foreground/60">—</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                            {lots.length > 1 && (
+                                <tfoot>
+                                    <tr className="border-t border-border/60 text-muted-foreground bg-muted/10">
+                                        <td colSpan={3} className="pl-10 pr-3 py-2 text-[10px] font-semibold uppercase tracking-wider">
+                                            {lots.length} lots
+                                        </td>
+                                        <td className={cellCls + " font-semibold text-foreground/70"}>
+                                            {formatNumber(
+                                                lots.reduce((s, l) => s + l.quantity_remaining, 0),
+                                                qtyDp,
+                                            )}
+                                        </td>
+                                        <td />
+                                        <td className={cellCls + " font-semibold text-foreground/70"}>
+                                            {formatCurrency(
+                                                lots.reduce((s, l) => s + l.quantity_remaining * l.cost_per_unit_base, 0),
+                                                baseCurrency,
+                                            )}
+                                        </td>
+                                        <td className={cellCls + " font-semibold text-foreground/70"}>
+                                            {parent.current_value_base != null
+                                                ? formatCurrency(parent.current_value_base, baseCurrency)
+                                                : "—"
+                                            }
+                                        </td>
+                                        <td className={`${cellCls} font-semibold ${(parent.unrealized_pnl_base ?? 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                            {parent.unrealized_pnl_base != null
+                                                ? `${parent.unrealized_pnl_base >= 0 ? "+" : ""}${formatCurrency(parent.unrealized_pnl_base, baseCurrency)}`
+                                                : "—"
+                                            }
+                                        </td>
+                                        <td />
+                                    </tr>
+                                </tfoot>
+                            )}
+                        </table>
+                    )}
+                </div>
+            </td>
+        </tr>
+    );
+}
+
+// ---------------------------------------------------------------------------
 // TradingJournalPage
 // ---------------------------------------------------------------------------
 
@@ -661,6 +848,11 @@ export default function TradingJournalPage() {
     const [realizedData, setRealizedData] = useState<RealizedPnLRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // ── Lot expansion state ───────────────────────────────────────────────────
+    const [expandedAssets, setExpandedAssets] = useState<Set<string>>(new Set());
+    const [lotsByAsset, setLotsByAsset] = useState<Record<string, TaxLotRow[]>>({});
+    const [loadingLots, setLoadingLots] = useState<Set<string>>(new Set());
 
     // ── Data fetching — extracted so it can be called after a trade ──────────
     const fetchJournalData = useCallback(async () => {
@@ -685,6 +877,11 @@ export default function TradingJournalPage() {
 
             setUnrealizedData((unrealizedResult.data as UnrealizedPnLRow[]) ?? []);
             setRealizedData((realizedResult.data as RealizedPnLRow[]) ?? []);
+
+            // Stale lot cache: clear any expanded assets so data is re-fetched
+            // if the user re-expands after recording a new trade.
+            setExpandedAssets(new Set());
+            setLotsByAsset({});
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Failed to load ledger views.";
             console.error("Error fetching trading journal data:", err);
@@ -697,6 +894,49 @@ export default function TradingJournalPage() {
     useEffect(() => {
         void fetchJournalData();
     }, [fetchJournalData]);
+
+    // ── Lot toggle — lazy-fetches on first expand, then uses cache ────────────
+    const toggleAsset = useCallback(async (assetId: string) => {
+        // If already expanded, just collapse — no fetch needed.
+        if (expandedAssets.has(assetId)) {
+            setExpandedAssets((prev) => {
+                const next = new Set(prev);
+                next.delete(assetId);
+                return next;
+            });
+            return;
+        }
+
+        // Expand immediately so the loading skeleton shows right away.
+        setExpandedAssets((prev) => new Set(prev).add(assetId));
+
+        // Skip the fetch if we already have the lots cached.
+        if (lotsByAsset[assetId] !== undefined) return;
+
+        setLoadingLots((prev) => new Set(prev).add(assetId));
+        try {
+            const { data, error } = await supabase
+                .from("tax_lots")
+                .select("*")
+                .eq("asset_id", assetId)
+                .gt("quantity_remaining", 0)
+                .order("acquired_at", { ascending: true });
+
+            if (error) throw error;
+            setLotsByAsset((prev) => ({ ...prev, [assetId]: (data as TaxLotRow[]) ?? [] }));
+        } catch (err: unknown) {
+            console.error("Failed to load lots for asset", assetId, err);
+            // Store empty array so we don't retry in an infinite loop,
+            // and show the "no open lots" empty state instead.
+            setLotsByAsset((prev) => ({ ...prev, [assetId]: [] }));
+        } finally {
+            setLoadingLots((prev) => {
+                const next = new Set(prev);
+                next.delete(assetId);
+                return next;
+            });
+        }
+    }, [expandedAssets, lotsByAsset]);
 
     // ── Format helpers ────────────────────────────────────────────────────────
     const formatCurrency = (val: number, currency = "EUR") =>
@@ -904,6 +1144,8 @@ export default function TradingJournalPage() {
                             <table className="w-full text-left border-collapse text-xs sm:text-sm">
                                 <thead>
                                     <tr className="bg-muted/50 border-b border-border text-muted-foreground font-medium">
+                                        {/* Expand toggle column */}
+                                        <th className="w-10 p-4" aria-label="Expand" />
                                         <th className="p-4 font-semibold">Asset Name / Class</th>
                                         <th className="p-4 text-right font-semibold">Qty Held</th>
                                         <th className="p-4 text-right font-semibold">Avg Cost (Local)</th>
@@ -917,7 +1159,7 @@ export default function TradingJournalPage() {
                                 <tbody className="divide-y divide-border bg-card">
                                     {filteredUnrealized.length === 0 ? (
                                         <tr>
-                                            <td colSpan={8} className="p-8 text-center text-muted-foreground text-sm">
+                                            <td colSpan={9} className="p-8 text-center text-muted-foreground text-sm">
                                                 No active open positions found matching the selected asset class criteria.
                                             </td>
                                         </tr>
@@ -927,61 +1169,98 @@ export default function TradingJournalPage() {
                                             const isPositive = pnlBase >= 0;
                                             const qtyDp = row.asset_type === "CRYPTO" ? 6 : 4;
                                             const fxEffect = row.fx_effect ?? 0;
+                                            const isExpanded = expandedAssets.has(row.asset_id);
+                                            const isLoading = loadingLots.has(row.asset_id);
+                                            const lots = lotsByAsset[row.asset_id];
+                                            const lotCount = lots?.length ?? 0;
+
                                             return (
-                                                <tr key={row.asset_id} className="hover:bg-muted/40 transition">
-                                                    <td className="p-4">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className="font-semibold text-foreground">{row.asset_name}</span>
+                                                <React.Fragment key={row.asset_id}>
+                                                    <tr
+                                                        key={row.asset_id}
+                                                        onClick={() => void toggleAsset(row.asset_id)}
+                                                        className={`cursor-pointer transition ${isExpanded ? "bg-muted/30 dark:bg-muted/20" : "hover:bg-muted/40"}`}
+                                                    >
+                                                        {/* Chevron */}
+                                                        <td className="w-10 pl-4 pr-0">
                                                             <span
-                                                                className={`text-[10px] uppercase font-bold tracking-wide border px-1.5 py-0.5 rounded ${ASSET_TYPE_BADGES[row.asset_type] ?? ""}`}
+                                                                aria-hidden
+                                                                className={`inline-block text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
                                                             >
-                                                                {ASSET_TYPE_LABELS[row.asset_type] ?? row.asset_type}
+                                                                ›
                                                             </span>
-                                                        </div>
-                                                        {row.ticker && (
-                                                            <div className="text-xs text-muted-foreground font-mono mt-0.5">
-                                                                {row.ticker}
-                                                                {row.isin ? ` · ${row.isin}` : ""}
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="font-semibold text-foreground">{row.asset_name}</span>
+                                                                <span
+                                                                    className={`text-[10px] uppercase font-bold tracking-wide border px-1.5 py-0.5 rounded ${ASSET_TYPE_BADGES[row.asset_type] ?? ""}`}
+                                                                >
+                                                                    {ASSET_TYPE_LABELS[row.asset_type] ?? row.asset_type}
+                                                                </span>
+                                                                {isExpanded && !isLoading && lotCount > 0 && (
+                                                                    <span className="text-[10px] text-muted-foreground/70">
+                                                                        {lotCount} lot{lotCount !== 1 ? "s" : ""}
+                                                                    </span>
+                                                                )}
                                                             </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-4 text-right font-mono text-foreground/80">
-                                                        {formatNumber(row.quantity_held, qtyDp)}
-                                                    </td>
-                                                    <td className="p-4 text-right font-mono text-foreground/80">
-                                                        {formatCurrency(row.avg_cost_per_unit_local, row.local_currency)}
-                                                    </td>
-                                                    <td className="p-4 text-right font-mono text-foreground/80">
-                                                        {row.current_price != null
-                                                            ? formatCurrency(row.current_price, row.local_currency)
-                                                            : <span className="text-muted-foreground">—</span>
-                                                        }
-                                                    </td>
-                                                    <td className="p-4 text-right font-mono text-foreground font-medium">
-                                                        {row.current_value_base != null
-                                                            ? formatCurrency(row.current_value_base, baseCurrency)
-                                                            : <span className="text-muted-foreground">—</span>
-                                                        }
-                                                    </td>
-                                                    <td className={`p-4 text-right font-mono font-semibold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                                                        {row.unrealized_pnl_base != null
-                                                            ? `${isPositive ? "+" : ""}${formatCurrency(pnlBase, baseCurrency)}`
-                                                            : <span className="text-muted-foreground">—</span>
-                                                        }
-                                                    </td>
-                                                    <td className={`p-4 text-right font-mono text-xs ${fxEffect >= 0 ? "text-emerald-600 dark:text-emerald-500/90" : "text-rose-600 dark:text-rose-500/90"}`}>
-                                                        {row.fx_effect != null
-                                                            ? `${fxEffect >= 0 ? "▲ +" : "▼ "}${formatCurrency(fxEffect, baseCurrency)}`
-                                                            : "—"
-                                                        }
-                                                    </td>
-                                                    <td className={`p-4 text-right font-mono font-bold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                                                        {row.unrealized_pnl_pct != null
-                                                            ? `${row.unrealized_pnl_pct >= 0 ? "+" : ""}${formatNumber(row.unrealized_pnl_pct)}%`
-                                                            : "—"
-                                                        }
-                                                    </td>
-                                                </tr>
+                                                            {row.ticker && (
+                                                                <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                                                                    {row.ticker}
+                                                                    {row.isin ? ` · ${row.isin}` : ""}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="p-4 text-right font-mono text-foreground/80">
+                                                            {formatNumber(row.quantity_held, qtyDp)}
+                                                        </td>
+                                                        <td className="p-4 text-right font-mono text-foreground/80">
+                                                            {formatCurrency(row.avg_cost_per_unit_local, row.local_currency)}
+                                                        </td>
+                                                        <td className="p-4 text-right font-mono text-foreground/80">
+                                                            {row.current_price != null
+                                                                ? formatCurrency(row.current_price, row.local_currency)
+                                                                : <span className="text-muted-foreground">—</span>
+                                                            }
+                                                        </td>
+                                                        <td className="p-4 text-right font-mono text-foreground font-medium">
+                                                            {row.current_value_base != null
+                                                                ? formatCurrency(row.current_value_base, baseCurrency)
+                                                                : <span className="text-muted-foreground">—</span>
+                                                            }
+                                                        </td>
+                                                        <td className={`p-4 text-right font-mono font-semibold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                                            {row.unrealized_pnl_base != null
+                                                                ? `${isPositive ? "+" : ""}${formatCurrency(pnlBase, baseCurrency)}`
+                                                                : <span className="text-muted-foreground">—</span>
+                                                            }
+                                                        </td>
+                                                        <td className={`p-4 text-right font-mono text-xs ${fxEffect >= 0 ? "text-emerald-600 dark:text-emerald-500/90" : "text-rose-600 dark:text-rose-500/90"}`}>
+                                                            {row.fx_effect != null
+                                                                ? `${fxEffect >= 0 ? "▲ +" : "▼ "}${formatCurrency(fxEffect, baseCurrency)}`
+                                                                : "—"
+                                                            }
+                                                        </td>
+                                                        <td className={`p-4 text-right font-mono font-bold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                                            {row.unrealized_pnl_pct != null
+                                                                ? `${row.unrealized_pnl_pct >= 0 ? "+" : ""}${formatNumber(row.unrealized_pnl_pct)}%`
+                                                                : "—"
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                    {isExpanded && (
+                                                        <LotSubRows
+                                                            key={`lots-${row.asset_id}`}
+                                                            lots={lots ?? []}
+                                                            loading={isLoading}
+                                                            parent={row}
+                                                            colSpan={9}
+                                                            formatCurrency={formatCurrency}
+                                                            formatNumber={formatNumber}
+                                                            baseCurrency={baseCurrency}
+                                                        />
+                                                    )}
+                                                </React.Fragment>
                                             );
                                         })
                                     )}
