@@ -937,7 +937,10 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
                                             {formatNumber(lot.quantity_sold, qtyDp)}
                                         </td>
                                         <td className={cellCls + " text-foreground/80"}>
-                                            {formatCurrency(lot.cost_per_unit_base, baseCurrency)}
+                                            {lot.quantity_sold > 0
+                                                ? formatCurrency(lot.cost_basis_base / lot.quantity_sold, baseCurrency)
+                                                : "—"
+                                            }
                                         </td>
                                         <td className={cellCls + " text-muted-foreground"}>
                                             {formatCurrency(lot.cost_basis_base, baseCurrency)}
