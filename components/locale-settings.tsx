@@ -21,7 +21,7 @@ const THEME_OPTIONS = [
 
 export default function LocaleSettings() {
     const [locale, setLocale] = useState<string>("");
-    const [theme, setTheme] = useState<string>("light"); // ← New state for theme tracker
+    const [theme, setTheme] = useState<string>("light"); // ← State for theme tracker
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -30,62 +30,71 @@ export default function LocaleSettings() {
     // Helper utility to sync the HTML root class with the state entry
     const applyThemeToDOM = (targetTheme: string) => {
         if (typeof window !== "undefined") {
+            const root = window.document.documentElement;
             if (targetTheme === "dark") {
-                document.documentElement.classList.add("dark");
+                root.classList.add("dark");
             } else {
-                document.documentElement.classList.remove("dark");
+                root.classList.remove("dark");
             }
         }
     };
 
     useEffect(() => {
+        let isMounted = true;
         getUserSettings()
-            .then((prefs) => {
-                const fetchedLocale = prefs.locale ?? "en-US";
-                const fetchedTheme = prefs.theme ?? "light";
+            .then((settings) => {
+                if (!isMounted) return;
+                if (settings?.locale) setLocale(settings.locale);
+                if (settings?.theme) {
+                    setTheme(settings.theme);
+                    // Match the DOM class on entry initial validation pass
+                    applyThemeToDOM(settings.theme);
+                }
+            })
+            .catch((err) => {
+                console.error("Failed to fetch settings metrics parameters:", err);
+            })
+            .finally(() => {
+                if (isMounted) setLoading(false);
+            });
 
-                setLocale(fetchedLocale);
-                setTheme(fetchedTheme);
-                applyThemeToDOM(fetchedTheme);
-            })
-            .catch(() => {
-                setLocale("en-US");
-                setTheme("light");
-            })
-            .finally(() => setLoading(false));
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     const handleSave = async () => {
         setSaving(true);
         setError(null);
         setSaved(false);
-        try {
-            // Save both configuration items simultaneously inside preferences JSON payload
-            await upsertUserSettings({ locale, theme });
-            applyThemeToDOM(theme);
 
+        try {
+            // 1. Commit layout adjustments to Supabase database
+            await upsertUserSettings({ locale, theme });
             setSaved(true);
-            setTimeout(() => setSaved(false), 3000);
-        } catch {
-            setError("Failed to save preferences. Please try again.");
+
+            // 2. LIVE SYNC EFFECT: Instantly switch styles dynamically on screen
+            applyThemeToDOM(theme);
+        } catch (err: any) {
+            setError(err.message || "Failed to commit layout properties.");
         } finally {
             setSaving(false);
         }
     };
 
     if (loading) {
-        return <p className="text-sm text-muted-foreground">Loading...</p>;
+        return <p className="text-sm text-muted-foreground italic">Loading preference configurations...</p>;
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-md">
             {/* Locale Dropdown */}
             <div>
                 <label htmlFor="locale-select" className="text-sm font-medium">
-                    Display locale
+                    Regional Formatting & Language
                 </label>
                 <p className="text-xs text-muted-foreground mb-2">
-                    Used for number and date formatting throughout the app.
+                    Controls localization rules for timestamps, currencies, numbers and date-strings.
                 </p>
                 <select
                     id="locale-select"
@@ -93,6 +102,7 @@ export default function LocaleSettings() {
                     onChange={(e) => setLocale(e.target.value)}
                     className="w-full border rounded-md px-3 py-2 text-sm bg-background"
                 >
+                    <option value="" disabled>-- Select Regional Locale Setting --</option>
                     {LOCALE_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                             {opt.label}
@@ -101,13 +111,10 @@ export default function LocaleSettings() {
                 </select>
             </div>
 
+            {/* Regional State Validation Feedback Alert Box */}
             {locale && (
-                <p className="text-xs text-muted-foreground">
-                    Number: {new Intl.NumberFormat(locale).format(1234567.89)}
-                    {" \u00A0·\u00A0 "}
-                    Date: {new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(new Date())}
-                    {" \u00A0·\u00A0 "}
-                    Time: {new Intl.DateTimeFormat(locale, { timeStyle: "short" }).format(new Date(2000, 0, 1, 15, 30))}
+                <p className="text-[11px] bg-muted/60 text-muted-foreground px-2.5 py-1.5 rounded border border-border/60 font-mono">
+                    Sample Format: {new Intl.DateTimeFormat(locale, { dateStyle: "long", timeStyle: "short" }).format(new Date())} • {new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }).format(123456.78)}
                 </p>
             )}
 
@@ -133,18 +140,18 @@ export default function LocaleSettings() {
                 </select>
             </div>
 
-            <div className="pt-1">
+            <div className="pt-1 flex items-center gap-3">
                 <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 font-medium transition cursor-pointer"
                 >
                     {saving ? "Saving…" : "Save Preferences"}
                 </button>
-            </div>
 
-            {saved && <p className="text-sm text-green-600">Preferences saved successfully!</p>}
-            {error && <p className="text-sm text-destructive">{error}</p>}
+                {saved && <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold animate-pulse">Preferences saved successfully!</p>}
+                {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+            </div>
         </div>
     );
 }
