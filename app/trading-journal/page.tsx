@@ -707,7 +707,7 @@ function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumb
                                     // current_price is in local currency; cost_per_unit_base is in base.
                                     const currentPrice = parent.current_price;
                                     const currentValue = currentPrice != null
-                                        ? lot.quantity_remaining * currentPrice * (1 / (lot.exchange_rate_at_acquisition || 1)) * (lot.exchange_rate_at_acquisition || 1)
+                                        ? lot.quantity_remaining * currentPrice
                                         : null;
                                     // Simpler: use the exchange rates already baked into the parent view.
                                     // current_value_base / quantity_held gives current price per unit in base.
