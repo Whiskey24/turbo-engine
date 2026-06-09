@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Tables, TablesInsert } from "@/lib/database";
 
@@ -8,10 +8,10 @@ import type { Tables, TablesInsert } from "@/lib/database";
 // Types — use generated DB view/table types directly instead of duplicating
 // ---------------------------------------------------------------------------
 
-type UnrealizedPnLRow = Tables<"unrealized_pnl">;
-type RealizedPnLRow = Tables<"realized_pnl">;
+type UnrealizedPnLRow  = Tables<"unrealized_pnl">;
+type RealizedPnLRow    = Tables<"realized_pnl">;
 type CurrentHoldingRow = Tables<"current_holdings">;
-type TaxLotRow = Tables<"tax_lots">;
+type TaxLotRow         = Tables<"tax_lots">;
 
 /** Minimal shape selected from portfolio_assets for the BUY asset dropdown. */
 interface TradableAsset {
@@ -27,17 +27,17 @@ interface TradableAsset {
 // ---------------------------------------------------------------------------
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
-    STOCK: "Stock",
-    CRYPTO: "Cryptocurrency",
+    STOCK:   "Stock",
+    CRYPTO:  "Cryptocurrency",
     FUND_ETF: "Fund / ETF",
-    BOND: "Bond",
+    BOND:    "Bond",
 };
 
 const ASSET_TYPE_BADGES: Record<string, string> = {
-    STOCK: "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/50",
-    CRYPTO: "bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-900/50",
+    STOCK:    "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/50",
+    CRYPTO:   "bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-900/50",
     FUND_ETF: "bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/50",
-    BOND: "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/50",
+    BOND:     "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/50",
 };
 
 const TRADEABLE_ASSET_TYPES = ["STOCK", "CRYPTO", "FUND_ETF", "BOND"] as const;
@@ -95,12 +95,12 @@ interface TradeModalProps {
 
 function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
     const [form, setForm] = useState<TradeFormData>(buildDefaultForm(baseCurrency));
-    const [buyableAssets, setBuyableAssets] = useState<TradableAsset[]>([]);
+    const [buyableAssets, setBuyableAssets]     = useState<TradableAsset[]>([]);
     const [sellableHoldings, setSellableHoldings] = useState<CurrentHoldingRow[]>([]);
-    const [loadingAssets, setLoadingAssets] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
-    const [formError, setFormError] = useState<string | null>(null);
-    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [loadingAssets, setLoadingAssets]     = useState(true);
+    const [submitting, setSubmitting]           = useState(false);
+    const [formError, setFormError]             = useState<string | null>(null);
+    const [showAdvanced, setShowAdvanced]       = useState(false);
 
     // ── Fetch asset lists once on mount ──────────────────────────────────────
     useEffect(() => {
@@ -118,7 +118,7 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                     .in("asset_type", [...TRADEABLE_ASSET_TYPES])
                     .order("asset_name"),
             ]);
-            if (buyResult.data) setBuyableAssets(buyResult.data as TradableAsset[]);
+            if (buyResult.data)  setBuyableAssets(buyResult.data as TradableAsset[]);
             if (sellResult.data) setSellableHoldings(sellResult.data as CurrentHoldingRow[]);
             setLoadingAssets(false);
         }
@@ -127,10 +127,10 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
 
     // ── Auto-calculate total_amount from qty × price ± fee (+ accrued interest for bonds) ──
     useEffect(() => {
-        const qty = parseFloat(form.quantity);
-        const price = parseFloat(form.pricePerUnit);
-        const fee = parseFloat(form.fee) || 0;
-        const accrued = parseFloat(form.accruedInterest) || 0;
+        const qty      = parseFloat(form.quantity);
+        const price    = parseFloat(form.pricePerUnit);
+        const fee      = parseFloat(form.fee) || 0;
+        const accrued  = parseFloat(form.accruedInterest) || 0;
         if (!isNaN(qty) && qty > 0 && !isNaN(price) && price >= 0) {
             const gross = qty * price;
             // Accrued interest is paid by the buyer and received by the seller —
@@ -151,10 +151,10 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
 
     // buyableAssets is the authoritative source for all asset metadata (type, nominal_value),
     // so it's used as a lookup for both BUY and SELL sides.
-    const selectedAsset = buyableAssets.find((a) => a.id === form.assetId);
+    const selectedAsset   = buyableAssets.find((a) => a.id === form.assetId);
     const selectedHolding = sellableHoldings.find((h) => h.asset_id === form.assetId);
-    const isBond = selectedAsset?.type_slug === "BOND";
-    const nominalValue = selectedAsset?.nominal_value ?? null;
+    const isBond          = selectedAsset?.type_slug === "BOND";
+    const nominalValue    = selectedAsset?.nominal_value ?? null;
 
     // When the asset changes, reset bond-specific fields so stale % values
     // from a previously selected bond don't carry over to a new selection.
@@ -172,14 +172,14 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
     // state updates so there's no useEffect feedback loop between them.
     function handlePriceChange(raw: string) {
         const price = parseFloat(raw);
-        const pct = !isNaN(price) && nominalValue && nominalValue > 0
+        const pct   = !isNaN(price) && nominalValue && nominalValue > 0
             ? ((price / nominalValue) * 100).toFixed(6)
             : "";
         setForm((prev) => ({ ...prev, pricePerUnit: raw, percentOfNominal: pct }));
     }
 
     function handlePercentChange(raw: string) {
-        const pct = parseFloat(raw);
+        const pct   = parseFloat(raw);
         const price = !isNaN(pct) && nominalValue && nominalValue > 0
             ? ((pct / 100) * nominalValue).toFixed(6)
             : "";
@@ -223,18 +223,18 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
 
         try {
             const insert: TablesInsert<"asset_transactions"> = {
-                asset_id: form.assetId,
-                transaction_type: form.transactionType,
-                transacted_at: new Date(form.transactedAt).toISOString(),
-                quantity: parseFloat(form.quantity),
-                price_per_unit: parseFloat(form.pricePerUnit),
-                total_amount: parseFloat(form.totalAmount),
-                fee: parseFloat(form.fee) || 0,
-                currency: form.currency,
-                exchange_rate: parseFloat(form.exchangeRate) || 1,
-                broker: form.broker || null,
-                notes: form.notes || null,
-                accrued_interest: isBond ? (parseFloat(form.accruedInterest) || 0) : null,
+                asset_id:          form.assetId,
+                transaction_type:  form.transactionType,
+                transacted_at:     new Date(form.transactedAt).toISOString(),
+                quantity:          parseFloat(form.quantity),
+                price_per_unit:    parseFloat(form.pricePerUnit),
+                total_amount:      parseFloat(form.totalAmount),
+                fee:               parseFloat(form.fee) || 0,
+                currency:          form.currency,
+                exchange_rate:     parseFloat(form.exchangeRate) || 1,
+                broker:            form.broker || null,
+                notes:             form.notes  || null,
+                accrued_interest:  isBond ? (parseFloat(form.accruedInterest) || 0) : null,
             };
 
             const { error } = await supabase.from("asset_transactions").insert(insert);
@@ -280,19 +280,21 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                     <div className="flex gap-2 p-1 bg-muted rounded-xl">
                         <button
                             onClick={() => switchType("BUY")}
-                            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${!isSell
+                            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
+                                !isSell
                                     ? "bg-emerald-600 text-white shadow"
                                     : "text-muted-foreground hover:text-foreground"
-                                }`}
+                            }`}
                         >
                             Buy
                         </button>
                         <button
                             onClick={() => switchType("SELL")}
-                            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${isSell
+                            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
+                                isSell
                                     ? "bg-rose-600 text-white shadow"
                                     : "text-muted-foreground hover:text-foreground"
-                                }`}
+                            }`}
                         >
                             Sell
                         </button>
@@ -636,10 +638,11 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                     <button
                         onClick={handleSubmit}
                         disabled={submitting || loadingAssets}
-                        className={`px-5 py-2 text-sm font-semibold rounded-lg text-white transition shadow disabled:opacity-50 ${isSell
+                        className={`px-5 py-2 text-sm font-semibold rounded-lg text-white transition shadow disabled:opacity-50 ${
+                            isSell
                                 ? "bg-rose-600 hover:bg-rose-700"
                                 : "bg-emerald-600 hover:bg-emerald-700"
-                            }`}
+                        }`}
                     >
                         {submitting ? "Submitting…" : isSell ? "Record Sell" : "Record Buy"}
                     </button>
@@ -700,13 +703,13 @@ function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumb
                             <tbody className="divide-y divide-border/40">
                                 {lots.map((lot, idx) => {
                                     const acquiredDate = new Date(lot.acquired_at);
-                                    const ageMs = Date.now() - acquiredDate.getTime();
-                                    const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+                                    const ageMs        = Date.now() - acquiredDate.getTime();
+                                    const ageDays      = Math.floor(ageMs / (1000 * 60 * 60 * 24));
 
                                     // Per-lot P&L using current price from the parent unrealized row.
                                     // current_price is in local currency; cost_per_unit_base is in base.
-                                    const currentPrice = parent.current_price;
-                                    const currentValue = currentPrice != null
+                                    const currentPrice   = parent.current_price;
+                                    const currentValue   = currentPrice != null
                                         ? lot.quantity_remaining * currentPrice
                                         : null;
                                     // Simpler: use the exchange rates already baked into the parent view.
@@ -717,11 +720,11 @@ function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumb
                                     const lotCurrentValueBase = currentPriceBase != null
                                         ? lot.quantity_remaining * currentPriceBase
                                         : null;
-                                    const lotCostBasisBase = lot.quantity_remaining * lot.cost_per_unit_base;
-                                    const lotPnlBase = lotCurrentValueBase != null
+                                    const lotCostBasisBase    = lot.quantity_remaining * lot.cost_per_unit_base;
+                                    const lotPnlBase          = lotCurrentValueBase != null
                                         ? lotCurrentValueBase - lotCostBasisBase
                                         : null;
-                                    const lotPnlPct = lotPnlBase != null && lotCostBasisBase > 0
+                                    const lotPnlPct           = lotPnlBase != null && lotCostBasisBase > 0
                                         ? (lotPnlBase / lotCostBasisBase) * 100
                                         : null;
                                     const isPositive = (lotPnlBase ?? 0) >= 0;
@@ -744,10 +747,11 @@ function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumb
                                                 </div>
                                             </td>
                                             <td className={cellCls + " text-muted-foreground"}>
-                                                <span className={`inline-block px-1.5 py-0.5 rounded font-mono text-[10px] ${ageDays >= 365
+                                                <span className={`inline-block px-1.5 py-0.5 rounded font-mono text-[10px] ${
+                                                    ageDays >= 365
                                                         ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400"
                                                         : "bg-muted text-muted-foreground"
-                                                    }`}>
+                                                }`}>
                                                     {ageDays >= 365
                                                         ? `${(ageDays / 365).toFixed(1)}y`
                                                         : `${ageDays}d`}
@@ -836,23 +840,182 @@ function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumb
 }
 
 // ---------------------------------------------------------------------------
+// RealizedGroup — one sell transaction aggregated from its per-lot matches
+// ---------------------------------------------------------------------------
+
+interface RealizedGroup {
+    sell_transaction_id: string;
+    asset_id: string;
+    asset_name: string;
+    asset_type: string;
+    ticker: string | null;
+    isin: string | null;
+    sold_at: string;
+    total_quantity_sold: number;
+    total_cost_basis_base: number;
+    total_proceeds_base: number;
+    total_realized_pnl_base: number;
+    total_fx_effect: number;
+    realized_pnl_pct: number | null;
+    lots: RealizedPnLRow[];
+}
+
+// ---------------------------------------------------------------------------
+// RealizedLotSubRows — expands a sell transaction to show its FIFO lot matches
+// ---------------------------------------------------------------------------
+
+interface RealizedLotSubRowsProps {
+    group: RealizedGroup;
+    colSpan: number;
+    formatCurrency: (val: number, currency?: string) => string;
+    formatNumber: (val: number, decimals?: number) => string;
+    baseCurrency: string;
+}
+
+function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, baseCurrency }: RealizedLotSubRowsProps) {
+    const qtyDp   = group.asset_type === "CRYPTO" ? 6 : 4;
+    const cellCls = "px-3 py-2.5 text-right font-mono";
+
+    return (
+        <tr>
+            <td colSpan={colSpan} className="p-0 border-b border-border">
+                <div className="bg-muted/20 dark:bg-muted/10 border-l-4 border-rose-400/40 dark:border-rose-600/40">
+                    <table className="w-full text-xs border-collapse">
+                        <thead>
+                            <tr className="text-muted-foreground border-b border-border/60">
+                                <th className="pl-10 pr-3 py-2 text-left font-semibold w-8">#</th>
+                                <th className="px-3 py-2 text-left font-semibold">Lot Acquired</th>
+                                <th className="px-3 py-2 text-right font-semibold">Held</th>
+                                <th className="px-3 py-2 text-right font-semibold">Qty from Lot</th>
+                                <th className="px-3 py-2 text-right font-semibold">Cost / Unit</th>
+                                <th className="px-3 py-2 text-right font-semibold">Cost Basis</th>
+                                <th className="px-3 py-2 text-right font-semibold">Proceeds</th>
+                                <th className="px-3 py-2 text-right font-semibold">Realized P&amp;L</th>
+                                <th className="px-3 py-2 text-right font-semibold">P&amp;L %</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/40">
+                            {group.lots.map((lot, idx) => {
+                                const pnl        = lot.realized_pnl_base ?? 0;
+                                const isPositive = pnl >= 0;
+                                const pct        = lot.realized_pnl_pct;
+
+                                return (
+                                    <tr key={lot.lot_id} className="hover:bg-muted/30 transition">
+                                        <td className="pl-10 pr-3 py-2.5 text-muted-foreground font-semibold">
+                                            {idx + 1}
+                                        </td>
+                                        <td className="px-3 py-2.5">
+                                            <div className="text-foreground/80 font-medium">
+                                                {new Date(lot.acquired_at).toLocaleDateString(undefined, {
+                                                    year: "numeric", month: "short", day: "numeric",
+                                                })}
+                                            </div>
+                                            <div className="text-[10px] text-muted-foreground/70 mt-0.5">
+                                                → {new Date(lot.sold_at).toLocaleDateString(undefined, {
+                                                    year: "numeric", month: "short", day: "numeric",
+                                                })}
+                                            </div>
+                                        </td>
+                                        <td className={cellCls}>
+                                            <span className={`inline-block px-1.5 py-0.5 rounded font-mono text-[10px] ${
+                                                lot.is_long_term
+                                                    ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400"
+                                                    : "bg-muted text-muted-foreground"
+                                            }`}>
+                                                {lot.held_days >= 365
+                                                    ? `${(lot.held_days / 365).toFixed(1)}y`
+                                                    : `${lot.held_days}d`}
+                                            </span>
+                                            {lot.is_long_term && (
+                                                <div className="text-[9px] text-emerald-600 dark:text-emerald-500 mt-0.5 text-right">
+                                                    Long-term
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className={cellCls + " text-foreground/80"}>
+                                            {formatNumber(lot.quantity_sold, qtyDp)}
+                                        </td>
+                                        <td className={cellCls + " text-foreground/80"}>
+                                            {formatCurrency(lot.cost_per_unit_base, baseCurrency)}
+                                        </td>
+                                        <td className={cellCls + " text-muted-foreground"}>
+                                            {formatCurrency(lot.cost_basis_base, baseCurrency)}
+                                        </td>
+                                        <td className={cellCls + " text-foreground/80"}>
+                                            {formatCurrency(lot.proceeds_base, baseCurrency)}
+                                        </td>
+                                        <td className={`${cellCls} font-semibold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                            {isPositive ? "+" : ""}{formatCurrency(pnl, baseCurrency)}
+                                        </td>
+                                        <td className={`${cellCls} font-bold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                            {pct != null
+                                                ? `${pct >= 0 ? "+" : ""}${formatNumber(pct)}%`
+                                                : "—"
+                                            }
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                        {group.lots.length > 1 && (
+                            <tfoot>
+                                <tr className="border-t border-border/60 text-muted-foreground bg-muted/10">
+                                    <td colSpan={3} className="pl-10 pr-3 py-2 text-[10px] font-semibold uppercase tracking-wider">
+                                        {group.lots.length} lots
+                                    </td>
+                                    <td className={cellCls + " font-semibold text-foreground/70"}>
+                                        {formatNumber(group.total_quantity_sold, qtyDp)}
+                                    </td>
+                                    <td />
+                                    <td className={cellCls + " font-semibold text-foreground/70"}>
+                                        {formatCurrency(group.total_cost_basis_base, baseCurrency)}
+                                    </td>
+                                    <td className={cellCls + " font-semibold text-foreground/70"}>
+                                        {formatCurrency(group.total_proceeds_base, baseCurrency)}
+                                    </td>
+                                    <td className={`${cellCls} font-semibold ${group.total_realized_pnl_base >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                        {group.total_realized_pnl_base >= 0 ? "+" : ""}
+                                        {formatCurrency(group.total_realized_pnl_base, baseCurrency)}
+                                    </td>
+                                    <td className={`${cellCls} font-bold ${(group.realized_pnl_pct ?? 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                        {group.realized_pnl_pct != null
+                                            ? `${group.realized_pnl_pct >= 0 ? "+" : ""}${formatNumber(group.realized_pnl_pct)}%`
+                                            : "—"
+                                        }
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        )}
+                    </table>
+                </div>
+            </td>
+        </tr>
+    );
+}
+
+// ---------------------------------------------------------------------------
 // TradingJournalPage
 // ---------------------------------------------------------------------------
 
 export default function TradingJournalPage() {
-    const [activeTab, setActiveTab] = useState<"unrealized" | "realized">("unrealized");
+    const [activeTab, setActiveTab]       = useState<"unrealized" | "realized">("unrealized");
     const [selectedType, setSelectedType] = useState<string>("ALL");
     const [showTradeModal, setShowTradeModal] = useState(false);
 
     const [unrealizedData, setUnrealizedData] = useState<UnrealizedPnLRow[]>([]);
-    const [realizedData, setRealizedData] = useState<RealizedPnLRow[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [realizedData, setRealizedData]     = useState<RealizedPnLRow[]>([]);
+    const [loading, setLoading]               = useState(true);
+    const [error, setError]                   = useState<string | null>(null);
 
-    // ── Lot expansion state ───────────────────────────────────────────────────
+    // ── Lot expansion state (open positions) ─────────────────────────────────
     const [expandedAssets, setExpandedAssets] = useState<Set<string>>(new Set());
-    const [lotsByAsset, setLotsByAsset] = useState<Record<string, TaxLotRow[]>>({});
-    const [loadingLots, setLoadingLots] = useState<Set<string>>(new Set());
+    const [lotsByAsset, setLotsByAsset]       = useState<Record<string, TaxLotRow[]>>({});
+    const [loadingLots, setLoadingLots]       = useState<Set<string>>(new Set());
+
+    // ── Sell expansion state (closed history) ─────────────────────────────────
+    // No async fetch needed — realized data is already in memory.
+    const [expandedSells, setExpandedSells] = useState<Set<string>>(new Set());
 
     // ── Data fetching — extracted so it can be called after a trade ──────────
     const fetchJournalData = useCallback(async () => {
@@ -873,15 +1036,16 @@ export default function TradingJournalPage() {
             ]);
 
             if (unrealizedResult.error) throw unrealizedResult.error;
-            if (realizedResult.error) throw realizedResult.error;
+            if (realizedResult.error)   throw realizedResult.error;
 
             setUnrealizedData((unrealizedResult.data as UnrealizedPnLRow[]) ?? []);
-            setRealizedData((realizedResult.data as RealizedPnLRow[]) ?? []);
+            setRealizedData((realizedResult.data   as RealizedPnLRow[])     ?? []);
 
             // Stale lot cache: clear any expanded assets so data is re-fetched
             // if the user re-expands after recording a new trade.
             setExpandedAssets(new Set());
             setLotsByAsset({});
+            setExpandedSells(new Set());
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Failed to load ledger views.";
             console.error("Error fetching trading journal data:", err);
@@ -938,6 +1102,15 @@ export default function TradingJournalPage() {
         }
     }, [expandedAssets, lotsByAsset]);
 
+    const toggleSell = useCallback((sellId: string) => {
+        setExpandedSells((prev) => {
+            const next = new Set(prev);
+            if (next.has(sellId)) next.delete(sellId);
+            else next.add(sellId);
+            return next;
+        });
+    }, []);
+
     // ── Format helpers ────────────────────────────────────────────────────────
     const formatCurrency = (val: number, currency = "EUR") =>
         new Intl.NumberFormat("en-US", { style: "currency", currency }).format(val);
@@ -956,14 +1129,54 @@ export default function TradingJournalPage() {
         (row) => selectedType === "ALL" || row.asset_type === selectedType
     );
 
+    // Group realized rows by sell_transaction_id so the summary table shows
+    // one row per sell event. Each group holds the per-lot matches for that sell.
+    const groupedRealized = useMemo<RealizedGroup[]>(() => {
+        const map = new Map<string, RealizedGroup>();
+        for (const row of filteredRealized) {
+            const g = map.get(row.sell_transaction_id);
+            if (g) {
+                g.lots.push(row);
+                g.total_quantity_sold     += row.quantity_sold;
+                g.total_cost_basis_base   += row.cost_basis_base;
+                g.total_proceeds_base     += row.proceeds_base;
+                g.total_realized_pnl_base += row.realized_pnl_base ?? 0;
+                g.total_fx_effect         += row.fx_effect ?? 0;
+            } else {
+                map.set(row.sell_transaction_id, {
+                    sell_transaction_id:    row.sell_transaction_id,
+                    asset_id:               row.asset_id,
+                    asset_name:             row.asset_name,
+                    asset_type:             row.asset_type,
+                    ticker:                 row.ticker,
+                    isin:                   row.isin ?? null,
+                    sold_at:                row.sold_at,
+                    total_quantity_sold:    row.quantity_sold,
+                    total_cost_basis_base:  row.cost_basis_base,
+                    total_proceeds_base:    row.proceeds_base,
+                    total_realized_pnl_base: row.realized_pnl_base ?? 0,
+                    total_fx_effect:        row.fx_effect ?? 0,
+                    realized_pnl_pct:       null, // computed below
+                    lots:                   [row],
+                });
+            }
+        }
+        return Array.from(map.values()).map((g) => ({
+            ...g,
+            realized_pnl_pct: g.total_cost_basis_base > 0
+                ? (g.total_realized_pnl_base / g.total_cost_basis_base) * 100
+                : null,
+        }));
+    }, [filteredRealized]);
+
     const baseCurrency = unrealizedData[0]?.base_currency ?? "EUR";
 
     // Null-safe aggregations (view columns are nullable when no price data exists)
-    const totalCostBase = filteredUnrealized.reduce((acc, r) => acc + (r.total_cost_base ?? 0), 0);
-    const totalCurrentValueBase = filteredUnrealized.reduce((acc, r) => acc + (r.current_value_base ?? 0), 0);
-    const totalUnrealizedBase = filteredUnrealized.reduce((acc, r) => acc + (r.unrealized_pnl_base ?? 0), 0);
-    const totalRealizedBase = filteredRealized.reduce((acc, r) => acc + (r.realized_pnl_base ?? 0), 0);
-    const totalUnrealizedPct = totalCostBase > 0 ? (totalUnrealizedBase / totalCostBase) * 100 : 0;
+    const totalCostBase         = filteredUnrealized.reduce((acc, r) => acc + (r.total_cost_base           ?? 0), 0);
+    const totalCurrentValueBase = filteredUnrealized.reduce((acc, r) => acc + (r.current_value_base        ?? 0), 0);
+    const totalUnrealizedBase   = filteredUnrealized.reduce((acc, r) => acc + (r.unrealized_pnl_base       ?? 0), 0);
+    const totalRealizedBase     = filteredRealized.reduce(  (acc, r) => acc + (r.realized_pnl_base         ?? 0), 0);
+    const totalUnrealizedPct    = totalCostBase > 0 ? (totalUnrealizedBase / totalCostBase) * 100 : 0;
 
     // ── Loading / error states ────────────────────────────────────────────────
     if (loading) {
@@ -1075,19 +1288,21 @@ export default function TradingJournalPage() {
                             Unrealized Performance
                         </span>
                         <div
-                            className={`text-2xl font-bold mt-2 ${totalUnrealizedBase >= 0
+                            className={`text-2xl font-bold mt-2 ${
+                                totalUnrealizedBase >= 0
                                     ? "text-emerald-600 dark:text-emerald-400"
                                     : "text-rose-600 dark:text-rose-400"
-                                }`}
+                            }`}
                         >
                             {totalUnrealizedBase >= 0 ? "+" : ""}
                             {formatCurrency(totalUnrealizedBase, baseCurrency)}
                         </div>
                         <p
-                            className={`text-xs mt-1 font-medium ${totalUnrealizedBase >= 0
+                            className={`text-xs mt-1 font-medium ${
+                                totalUnrealizedBase >= 0
                                     ? "text-emerald-600 dark:text-emerald-500"
                                     : "text-rose-600 dark:text-rose-500"
-                                }`}
+                            }`}
                         >
                             {totalUnrealizedPct >= 0 ? "+" : ""}
                             {formatNumber(totalUnrealizedPct)}% ROI
@@ -1099,10 +1314,11 @@ export default function TradingJournalPage() {
                             Realized Performance Summary
                         </span>
                         <div
-                            className={`text-2xl font-bold mt-2 ${totalRealizedBase >= 0
+                            className={`text-2xl font-bold mt-2 ${
+                                totalRealizedBase >= 0
                                     ? "text-emerald-600 dark:text-emerald-400"
                                     : "text-rose-600 dark:text-rose-400"
-                                }`}
+                            }`}
                         >
                             {totalRealizedBase >= 0 ? "+" : ""}
                             {formatCurrency(totalRealizedBase, baseCurrency)}
@@ -1117,21 +1333,23 @@ export default function TradingJournalPage() {
                 <div className="flex border-b border-border">
                     <button
                         onClick={() => setActiveTab("unrealized")}
-                        className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${activeTab === "unrealized"
+                        className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
+                            activeTab === "unrealized"
                                 ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-muted/40"
                                 : "border-transparent text-muted-foreground hover:text-foreground"
-                            }`}
+                        }`}
                     >
                         Open Positions ({filteredUnrealized.length})
                     </button>
                     <button
                         onClick={() => setActiveTab("realized")}
-                        className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${activeTab === "realized"
+                        className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
+                            activeTab === "realized"
                                 ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-muted/40"
                                 : "border-transparent text-muted-foreground hover:text-foreground"
-                            }`}
+                        }`}
                     >
-                        Closed History ({filteredRealized.length})
+                        Closed History ({groupedRealized.length})
                     </button>
                 </div>
 
@@ -1165,14 +1383,14 @@ export default function TradingJournalPage() {
                                         </tr>
                                     ) : (
                                         filteredUnrealized.map((row) => {
-                                            const pnlBase = row.unrealized_pnl_base ?? 0;
+                                            const pnlBase    = row.unrealized_pnl_base ?? 0;
                                             const isPositive = pnlBase >= 0;
-                                            const qtyDp = row.asset_type === "CRYPTO" ? 6 : 4;
-                                            const fxEffect = row.fx_effect ?? 0;
+                                            const qtyDp      = row.asset_type === "CRYPTO" ? 6 : 4;
+                                            const fxEffect   = row.fx_effect ?? 0;
                                             const isExpanded = expandedAssets.has(row.asset_id);
-                                            const isLoading = loadingLots.has(row.asset_id);
-                                            const lots = lotsByAsset[row.asset_id];
-                                            const lotCount = lots?.length ?? 0;
+                                            const isLoading  = loadingLots.has(row.asset_id);
+                                            const lots       = lotsByAsset[row.asset_id];
+                                            const lotCount   = lots?.length ?? 0;
 
                                             return (
                                                 <React.Fragment key={row.asset_id}>
@@ -1275,9 +1493,10 @@ export default function TradingJournalPage() {
                             <table className="w-full text-left border-collapse text-xs sm:text-sm">
                                 <thead>
                                     <tr className="bg-muted/50 border-b border-border text-muted-foreground font-medium">
-                                        <th className="p-4 font-semibold">Asset Details / Class</th>
-                                        <th className="p-4 text-right font-semibold">Qty Match</th>
-                                        <th className="p-4 font-semibold">Holding Duration</th>
+                                        <th className="w-10 p-4" aria-label="Expand" />
+                                        <th className="p-4 font-semibold">Asset / Class</th>
+                                        <th className="p-4 text-right font-semibold">Qty Sold</th>
+                                        <th className="p-4 font-semibold">Sold Date</th>
                                         <th className="p-4 text-right font-semibold">Cost Basis ({baseCurrency})</th>
                                         <th className="p-4 text-right font-semibold">Net Proceeds ({baseCurrency})</th>
                                         <th className="p-4 text-right font-semibold">Realized P&amp;L ({baseCurrency})</th>
@@ -1286,75 +1505,101 @@ export default function TradingJournalPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border bg-card">
-                                    {filteredRealized.length === 0 ? (
+                                    {groupedRealized.length === 0 ? (
                                         <tr>
-                                            <td colSpan={8} className="p-8 text-center text-muted-foreground text-sm">
-                                                No matched sales transactions logged matching the selected asset class criteria.
+                                            <td colSpan={9} className="p-8 text-center text-muted-foreground text-sm">
+                                                No closed positions found matching the selected asset class criteria.
                                             </td>
                                         </tr>
                                     ) : (
-                                        filteredRealized.map((row) => {
-                                            const pnlBase = row.realized_pnl_base ?? 0;
-                                            const isPositive = pnlBase >= 0;
-                                            const fxEffect = row.fx_effect ?? 0;
-                                            const qtyDp = row.asset_type === "CRYPTO" ? 6 : 4;
+                                        groupedRealized.map((group) => {
+                                            const pnl        = group.total_realized_pnl_base;
+                                            const isPositive = pnl >= 0;
+                                            const fxEffect   = group.total_fx_effect;
+                                            const qtyDp      = group.asset_type === "CRYPTO" ? 6 : 4;
+                                            const isExpanded = expandedSells.has(group.sell_transaction_id);
+                                            const multiLot   = group.lots.length > 1;
+
                                             return (
-                                                <tr
-                                                    key={`${row.sell_transaction_id}-${row.lot_id}`}
-                                                    className="hover:bg-muted/40 transition"
-                                                >
-                                                    <td className="p-4">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className="font-semibold text-foreground">{row.asset_name}</span>
-                                                            <span className={`text-[10px] uppercase font-bold tracking-wide border px-1.5 py-0.5 rounded ${ASSET_TYPE_BADGES[row.asset_type] ?? ""}`}>
-                                                                {ASSET_TYPE_LABELS[row.asset_type] ?? row.asset_type}
+                                                <React.Fragment key={group.sell_transaction_id}>
+                                                    <tr
+                                                        onClick={() => toggleSell(group.sell_transaction_id)}
+                                                        className={`cursor-pointer transition ${isExpanded ? "bg-muted/30 dark:bg-muted/20" : "hover:bg-muted/40"}`}
+                                                    >
+                                                        {/* Chevron */}
+                                                        <td className="w-10 pl-4 pr-0">
+                                                            <span
+                                                                aria-hidden
+                                                                className={`inline-block text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
+                                                            >
+                                                                ›
                                                             </span>
-                                                        </div>
-                                                        {row.ticker && (
-                                                            <div className="text-xs text-muted-foreground font-mono mt-0.5">
-                                                                {row.ticker}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-4 text-right font-mono text-foreground/80">
-                                                        {formatNumber(row.quantity_sold, qtyDp)}
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <div className="text-foreground/80 text-xs font-medium">
-                                                            {row.acquired_at} → {row.sold_at}
-                                                        </div>
-                                                        <div className="text-[10px] text-muted-foreground mt-0.5 flex gap-1.5 items-center flex-wrap">
-                                                            <span className="bg-muted px-1.5 py-0.5 rounded font-mono">
-                                                                {row.held_days} Days
-                                                            </span>
-                                                            {row.is_long_term && (
-                                                                <span className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50 px-1 py-0.5 rounded font-semibold">
-                                                                    Long-Term Horizon
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="font-semibold text-foreground">{group.asset_name}</span>
+                                                                <span className={`text-[10px] uppercase font-bold tracking-wide border px-1.5 py-0.5 rounded ${ASSET_TYPE_BADGES[group.asset_type] ?? ""}`}>
+                                                                    {ASSET_TYPE_LABELS[group.asset_type] ?? group.asset_type}
                                                                 </span>
+                                                                {isExpanded && multiLot && (
+                                                                    <span className="text-[10px] text-muted-foreground/70">
+                                                                        {group.lots.length} lots
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {group.ticker && (
+                                                                <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                                                                    {group.ticker}
+                                                                    {group.isin ? ` · ${group.isin}` : ""}
+                                                                </div>
                                                             )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4 text-right font-mono text-muted-foreground">
-                                                        {formatCurrency(row.cost_basis_base, baseCurrency)}
-                                                    </td>
-                                                    <td className="p-4 text-right font-mono text-foreground/80">
-                                                        {formatCurrency(row.proceeds_base, baseCurrency)}
-                                                    </td>
-                                                    <td className={`p-4 text-right font-mono font-semibold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                                                        {isPositive ? "+" : ""}
-                                                        {formatCurrency(pnlBase, baseCurrency)}
-                                                    </td>
-                                                    <td className={`p-4 text-right font-mono text-xs ${fxEffect >= 0 ? "text-emerald-600 dark:text-emerald-500/90" : "text-rose-600 dark:text-rose-500/90"}`}>
-                                                        {fxEffect >= 0 ? "▲ +" : "▼ "}
-                                                        {formatCurrency(fxEffect, baseCurrency)}
-                                                    </td>
-                                                    <td className={`p-4 text-right font-mono font-bold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                                                        {row.realized_pnl_pct != null
-                                                            ? `${row.realized_pnl_pct >= 0 ? "+" : ""}${formatNumber(row.realized_pnl_pct)}%`
-                                                            : "—"
-                                                        }
-                                                    </td>
-                                                </tr>
+                                                        </td>
+                                                        <td className="p-4 text-right font-mono text-foreground/80">
+                                                            {formatNumber(group.total_quantity_sold, qtyDp)}
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <div className="text-foreground/80 font-medium">
+                                                                {new Date(group.sold_at).toLocaleDateString(undefined, {
+                                                                    year: "numeric", month: "short", day: "numeric",
+                                                                })}
+                                                            </div>
+                                                            {multiLot && !isExpanded && (
+                                                                <div className="text-[10px] text-muted-foreground/70 mt-0.5">
+                                                                    {group.lots.length} FIFO lots matched
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="p-4 text-right font-mono text-muted-foreground">
+                                                            {formatCurrency(group.total_cost_basis_base, baseCurrency)}
+                                                        </td>
+                                                        <td className="p-4 text-right font-mono text-foreground/80">
+                                                            {formatCurrency(group.total_proceeds_base, baseCurrency)}
+                                                        </td>
+                                                        <td className={`p-4 text-right font-mono font-semibold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                                            {isPositive ? "+" : ""}{formatCurrency(pnl, baseCurrency)}
+                                                        </td>
+                                                        <td className={`p-4 text-right font-mono text-xs ${fxEffect >= 0 ? "text-emerald-600 dark:text-emerald-500/90" : "text-rose-600 dark:text-rose-500/90"}`}>
+                                                            {fxEffect >= 0 ? "▲ +" : "▼ "}
+                                                            {formatCurrency(fxEffect, baseCurrency)}
+                                                        </td>
+                                                        <td className={`p-4 text-right font-mono font-bold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                                                            {group.realized_pnl_pct != null
+                                                                ? `${group.realized_pnl_pct >= 0 ? "+" : ""}${formatNumber(group.realized_pnl_pct)}%`
+                                                                : "—"
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                    {isExpanded && (
+                                                        <RealizedLotSubRows
+                                                            key={`lots-${group.sell_transaction_id}`}
+                                                            group={group}
+                                                            colSpan={9}
+                                                            formatCurrency={formatCurrency}
+                                                            formatNumber={formatNumber}
+                                                            baseCurrency={baseCurrency}
+                                                        />
+                                                    )}
+                                                </React.Fragment>
                                             );
                                         })
                                     )}
