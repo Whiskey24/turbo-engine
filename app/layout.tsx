@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import AuthProviderGate from "@/components/auth-provider-gate"; // We will create this next
+import ThemeSyncProvider from "@/components/theme-sync-provider";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
