@@ -21,7 +21,9 @@ export default function RootLayout({
       <body className={`${inter.className} min-h-screen bg-background text-foreground antialiased`}>
         {/* Pass all rendering logic down safely to a client-side provider wrapper */}
         <AuthProviderGate>
-          {children}
+          <ThemeSyncProvider>
+            {children}
+          </ThemeSyncProvider>
         </AuthProviderGate>
       </body>
     </html>
