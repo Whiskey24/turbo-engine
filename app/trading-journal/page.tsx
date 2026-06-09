@@ -18,6 +18,7 @@ interface TradableAsset {
     name: string;
     ticker: string | null;
     type_slug: string;
+    nominal_value: number | null;  // face/par value per unit — only set for BONDs
 }
 
 // ---------------------------------------------------------------------------
@@ -50,10 +51,12 @@ const COMMON_CURRENCIES = ["EUR", "USD", "GBP", "CHF", "JPY", "SEK", "NOK", "DKK
 interface TradeFormData {
     transactionType: "BUY" | "SELL";
     assetId: string;
-    transactedAt: string;   // "YYYY-MM-DDTHH:mm" for <input type="datetime-local">
+    transactedAt: string;       // "YYYY-MM-DDTHH:mm" for <input type="datetime-local">
     quantity: string;
-    pricePerUnit: string;
-    totalAmount: string;    // auto-calculated but user-editable for override
+    pricePerUnit: string;       // absolute clean price per unit
+    percentOfNominal: string;   // bond only: price expressed as % of nominal value
+    accruedInterest: string;    // bond only: accrued coupon interest on top of clean price
+    totalAmount: string;        // auto-calculated but user-editable for override
     fee: string;
     currency: string;
     exchangeRate: string;
@@ -68,6 +71,8 @@ function buildDefaultForm(baseCurrency: string): TradeFormData {
         transactedAt: new Date().toISOString().slice(0, 16),
         quantity: "",
         pricePerUnit: "",
+        percentOfNominal: "",
+        accruedInterest: "0",
         totalAmount: "",
         fee: "0",
         currency: baseCurrency,
@@ -103,7 +108,7 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
             const [buyResult, sellResult] = await Promise.all([
                 supabase
                     .from("portfolio_assets")
-                    .select("id, name, ticker, type_slug")
+                    .select("id, name, ticker, type_slug, nominal_value")
                     .in("type_slug", [...TRADEABLE_ASSET_TYPES])
                     .order("name"),
                 supabase
@@ -119,26 +124,66 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
         void loadAssets();
     }, []);
 
-    // ── Auto-calculate total_amount from qty × price ± fee ───────────────────
+    // ── Auto-calculate total_amount from qty × price ± fee (+ accrued interest for bonds) ──
     useEffect(() => {
         const qty = parseFloat(form.quantity);
         const price = parseFloat(form.pricePerUnit);
         const fee = parseFloat(form.fee) || 0;
+        const accrued = parseFloat(form.accruedInterest) || 0;
         if (!isNaN(qty) && qty > 0 && !isNaN(price) && price >= 0) {
             const gross = qty * price;
-            const total = form.transactionType === "BUY" ? gross + fee : gross - fee;
+            // Accrued interest is paid by the buyer and received by the seller —
+            // so it adds to the total in both directions (cost basis vs. proceeds).
+            const total = form.transactionType === "BUY"
+                ? gross + accrued + fee
+                : gross + accrued - fee;
             setForm((prev) => ({ ...prev, totalAmount: Math.max(0, total).toFixed(4) }));
         }
-    }, [form.quantity, form.pricePerUnit, form.fee, form.transactionType]);
+    }, [form.quantity, form.pricePerUnit, form.fee, form.accruedInterest, form.transactionType]);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     const update = (field: keyof TradeFormData, value: string) =>
         setForm((prev) => ({ ...prev, [field]: value }));
 
     const switchType = (type: "BUY" | "SELL") =>
-        setForm((prev) => ({ ...prev, transactionType: type, assetId: "" }));
+        setForm((prev) => ({ ...prev, transactionType: type, assetId: "", percentOfNominal: "", accruedInterest: "0" }));
 
+    // buyableAssets is the authoritative source for all asset metadata (type, nominal_value),
+    // so it's used as a lookup for both BUY and SELL sides.
+    const selectedAsset = buyableAssets.find((a) => a.id === form.assetId);
     const selectedHolding = sellableHoldings.find((h) => h.asset_id === form.assetId);
+    const isBond = selectedAsset?.type_slug === "BOND";
+    const nominalValue = selectedAsset?.nominal_value ?? null;
+
+    // When the asset changes, reset bond-specific fields so stale % values
+    // from a previously selected bond don't carry over to a new selection.
+    function handleAssetChange(assetId: string) {
+        setForm((prev) => ({
+            ...prev,
+            assetId,
+            pricePerUnit: "",
+            percentOfNominal: "",
+            accruedInterest: "0",
+        }));
+    }
+
+    // Bond pricing: price ↔ % of nominal are kept in sync via direct atomic
+    // state updates so there's no useEffect feedback loop between them.
+    function handlePriceChange(raw: string) {
+        const price = parseFloat(raw);
+        const pct = !isNaN(price) && nominalValue && nominalValue > 0
+            ? ((price / nominalValue) * 100).toFixed(6)
+            : "";
+        setForm((prev) => ({ ...prev, pricePerUnit: raw, percentOfNominal: pct }));
+    }
+
+    function handlePercentChange(raw: string) {
+        const pct = parseFloat(raw);
+        const price = !isNaN(pct) && nominalValue && nominalValue > 0
+            ? ((pct / 100) * nominalValue).toFixed(6)
+            : "";
+        setForm((prev) => ({ ...prev, percentOfNominal: raw, pricePerUnit: price }));
+    }
 
     // ── Validation ────────────────────────────────────────────────────────────
     function validate(): string | null {
@@ -188,6 +233,7 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                 exchange_rate: parseFloat(form.exchangeRate) || 1,
                 broker: form.broker || null,
                 notes: form.notes || null,
+                accrued_interest: isBond ? (parseFloat(form.accruedInterest) || 0) : null,
             };
 
             const { error } = await supabase.from("asset_transactions").insert(insert);
@@ -270,7 +316,7 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                         ) : (
                             <select
                                 value={form.assetId}
-                                onChange={(e) => update("assetId", e.target.value)}
+                                onChange={(e) => handleAssetChange(e.target.value)}
                                 className={inputCls + " font-sans cursor-pointer"}
                             >
                                 <option value="">Select asset…</option>
@@ -327,7 +373,7 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                         />
                     </div>
 
-                    {/* Quantity + Price per unit */}
+                    {/* Quantity + Price */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -354,19 +400,108 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                Price Per Unit
+                                {isBond ? "Clean Price Per Unit" : "Price Per Unit"}
                             </label>
                             <input
                                 type="number"
                                 min="0"
                                 step="any"
                                 value={form.pricePerUnit}
-                                onChange={(e) => update("pricePerUnit", e.target.value)}
+                                onChange={(e) => isBond ? handlePriceChange(e.target.value) : update("pricePerUnit", e.target.value)}
                                 placeholder="0.00"
                                 className={inputCls}
                             />
                         </div>
                     </div>
+
+                    {/* Bond pricing panel — % of nominal ↔ price per unit */}
+                    {isBond && (
+                        <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 p-4 space-y-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                                    Bond Pricing
+                                </span>
+                                {nominalValue != null && (
+                                    <span className="text-[10px] text-indigo-500 dark:text-indigo-500/80 font-mono">
+                                        Nominal: {nominalValue} {form.currency}
+                                    </span>
+                                )}
+                                {nominalValue == null && (
+                                    <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                                        ⚠ No nominal value set — enter price directly above
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                {/* % of nominal */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                                        % of Nominal
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            value={form.percentOfNominal}
+                                            onChange={(e) => handlePercentChange(e.target.value)}
+                                            placeholder="e.g. 98.50"
+                                            disabled={nominalValue == null}
+                                            className={inputCls + " pr-8" + (nominalValue == null ? " opacity-40 cursor-not-allowed" : "")}
+                                        />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-mono">
+                                            %
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground">
+                                        Updates price ↑
+                                    </p>
+                                </div>
+
+                                {/* Accrued interest */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                                        Accrued Interest
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        value={form.accruedInterest}
+                                        onChange={(e) => update("accruedInterest", e.target.value)}
+                                        placeholder="0.00"
+                                        className={inputCls}
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">
+                                        Added to total ↓
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Dirty price preview */}
+                            {form.pricePerUnit && form.quantity && (
+                                <div className="text-[11px] text-indigo-700 dark:text-indigo-300 font-mono bg-indigo-100/60 dark:bg-indigo-900/30 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1">
+                                    <span>
+                                        Dirty price per unit:{" "}
+                                        <strong>
+                                            {(parseFloat(form.pricePerUnit) + (parseFloat(form.accruedInterest) || 0) / Math.max(parseFloat(form.quantity) || 1, 0.0000001)).toFixed(6)}
+                                        </strong>
+                                    </span>
+                                    {nominalValue != null && form.percentOfNominal && (
+                                        <span>
+                                            Dirty %:{" "}
+                                            <strong>
+                                                {(
+                                                    ((parseFloat(form.pricePerUnit) + (parseFloat(form.accruedInterest) || 0) / Math.max(parseFloat(form.quantity) || 1, 0.0000001)) / nominalValue) * 100
+                                                ).toFixed(4)}%
+                                            </strong>
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Fee + Total amount */}
                     <div className="grid grid-cols-2 gap-4">
@@ -388,7 +523,7 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 Total Amount{" "}
                                 <span className="font-normal normal-case text-muted-foreground/60">
-                                    (auto)
+                                    {isBond ? "(clean + accrued ± fee)" : "(auto)"}
                                 </span>
                             </label>
                             <input
