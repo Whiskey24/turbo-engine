@@ -222,23 +222,60 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
         setSubmitting(true);
 
         try {
+            const qty          = parseFloat(form.quantity);
+            const price        = parseFloat(form.pricePerUnit);
+            const exchangeRate = parseFloat(form.exchangeRate) || 1;
+            const isBuy        = form.transactionType === "BUY";
+
+            // ── 1. Insert the transaction ───────────────────────────────────
             const insert: TablesInsert<"asset_transactions"> = {
                 asset_id:          form.assetId,
                 transaction_type:  form.transactionType,
                 transacted_at:     new Date(form.transactedAt).toISOString(),
-                quantity:          parseFloat(form.quantity),
-                price_per_unit:    parseFloat(form.pricePerUnit),
+                quantity:          qty,
+                price_per_unit:    price,
                 total_amount:      parseFloat(form.totalAmount),
                 fee:               parseFloat(form.fee) || 0,
                 currency:          form.currency,
-                exchange_rate:     parseFloat(form.exchangeRate) || 1,
+                exchange_rate:     exchangeRate,
                 broker:            form.broker || null,
                 notes:             form.notes  || null,
                 accrued_interest:  isBond ? (parseFloat(form.accruedInterest) || 0) : null,
             };
 
-            const { error } = await supabase.from("asset_transactions").insert(insert);
-            if (error) throw error;
+            const { error: txError } = await supabase.from("asset_transactions").insert(insert);
+            if (txError) throw txError;
+
+            // ── 2. Upsert a valuation for the trade date ────────────────────
+            // balance_amount = new total position value in base currency.
+            // Uses clean price (pricePerUnit) — accrued interest is a settlement
+            // item, not part of the ongoing mark-to-market value.
+            // sellableHoldings reflects the state BEFORE this trade, so we
+            // calculate the new quantity from that baseline.
+            const currentQty    = sellableHoldings.find((h) => h.asset_id === form.assetId)?.quantity_held ?? 0;
+            const newQty        = isBuy ? currentQty + qty : currentQty - qty;
+            const balanceAmount = newQty * price * exchangeRate;
+
+            // Date only (YYYY-MM-DD) — asset_valuations has one row per asset per day.
+            const valuationDate = form.transactedAt.slice(0, 10);
+
+            const { error: valuationError } = await supabase
+                .from("asset_valuations")
+                .upsert(
+                    {
+                        asset_id:       form.assetId,
+                        valuation_date: valuationDate,
+                        balance_amount: balanceAmount,
+                    },
+                    { onConflict: "asset_id, valuation_date" },
+                );
+
+            if (valuationError) {
+                // The transaction is already committed — log the warning but
+                // don't block the success flow. The user can add the valuation
+                // manually on the Valuation Ledger page if needed.
+                console.warn("Trade recorded but valuation upsert failed:", valuationError.message);
+            }
 
             onSuccess();
             onClose();
