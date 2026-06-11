@@ -612,6 +612,12 @@ export type Database = {
         Args: Record<PropertyKey, never> // This indicates the function takes no arguments
         Returns: undefined               // This matches the SQL "returns void"
       }
+      undo_last_transaction: {
+        Args: {
+          p_transaction_id: string       // This matches the SQL "p_transaction_id uuid"
+        }
+        Returns: undefined               // This matches the SQL "RETURNS void"
+      }
     }
     Enums: {
       [_ in never]: never

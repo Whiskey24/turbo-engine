@@ -1208,75 +1208,17 @@ export default function TradingJournalPage() {
         setUndoing(true);
         setUndoError(null);
         try {
-            const txId = pendingUndo.transactionId;
-            const isBuy = pendingUndo.transactionType === "BUY";
+            // Single atomic RPC — the function handles lot_matches cleanup and
+            // tax_lots restoration inside the DB, where the user's own permissions
+            // apply correctly without the silent-failure problem of multi-step
+            // client-side deletes against trigger-managed tables.
+            const { error: rpcError } = await supabase.rpc(
+                "undo_last_transaction",
+                { p_transaction_id: pendingUndo.transactionId },
+            );
+            if (rpcError) throw rpcError;
 
-            if (isBuy) {
-                // A BUY creates one or more tax_lots (transaction_id → asset_transactions.id).
-                // Any lot_matches referencing those lots must be removed first.
-                const { data: lots } = await supabase
-                    .from("tax_lots")
-                    .select("id")
-                    .eq("transaction_id", txId);
-
-                if (lots && lots.length > 0) {
-                    const lotIds = lots.map((l) => l.id);
-                    // Delete lot_matches first (they reference tax_lots).
-                    // Normally empty for the last BUY, but guard anyway.
-                    await supabase
-                        .from("lot_matches")
-                        .delete()
-                        .in("lot_id", lotIds);
-                    // Now safe to delete the lots themselves.
-                    await supabase
-                        .from("tax_lots")
-                        .delete()
-                        .in("id", lotIds);
-                }
-            } else {
-                // A SELL creates lot_matches (sell_transaction_id → asset_transactions.id)
-                // and partially consumes tax_lots by reducing quantity_remaining.
-                // We must restore quantity_remaining before deleting the matches.
-                const { data: matches } = await supabase
-                    .from("lot_matches")
-                    .select("lot_id, quantity_matched")
-                    .eq("sell_transaction_id", txId);
-
-                if (matches && matches.length > 0) {
-                    // Batch-fetch current quantity_remaining for all affected lots.
-                    const lotIds = matches.map((m) => m.lot_id);
-                    const { data: lots } = await supabase
-                        .from("tax_lots")
-                        .select("id, quantity_remaining")
-                        .in("id", lotIds);
-
-                    if (lots) {
-                        const remainingById = new Map(lots.map((l) => [l.id, l.quantity_remaining]));
-                        // Restore each lot sequentially (N is small in practice).
-                        for (const match of matches) {
-                            const current = remainingById.get(match.lot_id) ?? 0;
-                            await supabase
-                                .from("tax_lots")
-                                .update({ quantity_remaining: current + match.quantity_matched })
-                                .eq("id", match.lot_id);
-                        }
-                    }
-                    // Safe to delete the matches now that lots are restored.
-                    await supabase
-                        .from("lot_matches")
-                        .delete()
-                        .eq("sell_transaction_id", txId);
-                }
-            }
-
-            // All FK dependents are gone — delete the transaction itself.
-            const { error: deleteError } = await supabase
-                .from("asset_transactions")
-                .delete()
-                .eq("id", txId);
-            if (deleteError) throw deleteError;
-
-            // Restore or remove the valuation we wrote on the trade date.
+            // Restore or remove the valuation written at trade time.
             if (pendingUndo.previousBalanceAmount === null) {
                 await supabase
                     .from("asset_valuations")
