@@ -8,10 +8,10 @@ import type { Tables, TablesInsert } from "@/lib/database";
 // Types — use generated DB view/table types directly instead of duplicating
 // ---------------------------------------------------------------------------
 
-type UnrealizedPnLRow  = Tables<"unrealized_pnl">;
-type RealizedPnLRow    = Tables<"realized_pnl">;
+type UnrealizedPnLRow = Tables<"unrealized_pnl">;
+type RealizedPnLRow = Tables<"realized_pnl">;
 type CurrentHoldingRow = Tables<"current_holdings">;
-type TaxLotRow         = Tables<"tax_lots">;
+type TaxLotRow = Tables<"tax_lots">;
 
 /** Minimal shape selected from portfolio_assets for the BUY asset dropdown. */
 interface TradableAsset {
@@ -27,17 +27,17 @@ interface TradableAsset {
 // ---------------------------------------------------------------------------
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
-    STOCK:   "Stock",
-    CRYPTO:  "Cryptocurrency",
+    STOCK: "Stock",
+    CRYPTO: "Cryptocurrency",
     FUND_ETF: "Fund / ETF",
-    BOND:    "Bond",
+    BOND: "Bond",
 };
 
 const ASSET_TYPE_BADGES: Record<string, string> = {
-    STOCK:    "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/50",
-    CRYPTO:   "bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-900/50",
+    STOCK: "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/50",
+    CRYPTO: "bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-900/50",
     FUND_ETF: "bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/50",
-    BOND:     "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/50",
+    BOND: "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/50",
 };
 
 const TRADEABLE_ASSET_TYPES = ["STOCK", "CRYPTO", "FUND_ETF", "BOND"] as const;
@@ -84,23 +84,41 @@ function buildDefaultForm(baseCurrency: string): TradeFormData {
 }
 
 // ---------------------------------------------------------------------------
+// Undo state — captures everything needed to reverse the last recorded trade
+// ---------------------------------------------------------------------------
+
+const UNDO_WINDOW_SECONDS = 30;
+
+interface UndoState {
+    transactionId: string;
+    assetId: string;
+    assetName: string;
+    transactionType: "BUY" | "SELL";
+    quantity: number;
+    pricePerUnit: number;
+    currency: string;
+    valuationDate: string;                // YYYY-MM-DD
+    previousBalanceAmount: number | null; // null = no valuation existed before trade
+}
+
+// ---------------------------------------------------------------------------
 // TradeModal
 // ---------------------------------------------------------------------------
 
 interface TradeModalProps {
     baseCurrency: string;
     onClose: () => void;
-    onSuccess: () => void;
+    onSuccess: (undoState: UndoState) => void;
 }
 
 function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
     const [form, setForm] = useState<TradeFormData>(buildDefaultForm(baseCurrency));
-    const [buyableAssets, setBuyableAssets]     = useState<TradableAsset[]>([]);
+    const [buyableAssets, setBuyableAssets] = useState<TradableAsset[]>([]);
     const [sellableHoldings, setSellableHoldings] = useState<CurrentHoldingRow[]>([]);
-    const [loadingAssets, setLoadingAssets]     = useState(true);
-    const [submitting, setSubmitting]           = useState(false);
-    const [formError, setFormError]             = useState<string | null>(null);
-    const [showAdvanced, setShowAdvanced]       = useState(false);
+    const [loadingAssets, setLoadingAssets] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
+    const [showAdvanced, setShowAdvanced] = useState(false);
 
     // ── Fetch asset lists once on mount ──────────────────────────────────────
     useEffect(() => {
@@ -118,7 +136,7 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                     .in("asset_type", [...TRADEABLE_ASSET_TYPES])
                     .order("asset_name"),
             ]);
-            if (buyResult.data)  setBuyableAssets(buyResult.data as TradableAsset[]);
+            if (buyResult.data) setBuyableAssets(buyResult.data as TradableAsset[]);
             if (sellResult.data) setSellableHoldings(sellResult.data as CurrentHoldingRow[]);
             setLoadingAssets(false);
         }
@@ -127,10 +145,10 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
 
     // ── Auto-calculate total_amount from qty × price ± fee (+ accrued interest for bonds) ──
     useEffect(() => {
-        const qty      = parseFloat(form.quantity);
-        const price    = parseFloat(form.pricePerUnit);
-        const fee      = parseFloat(form.fee) || 0;
-        const accrued  = parseFloat(form.accruedInterest) || 0;
+        const qty = parseFloat(form.quantity);
+        const price = parseFloat(form.pricePerUnit);
+        const fee = parseFloat(form.fee) || 0;
+        const accrued = parseFloat(form.accruedInterest) || 0;
         if (!isNaN(qty) && qty > 0 && !isNaN(price) && price >= 0) {
             const gross = qty * price;
             // Accrued interest is paid by the buyer and received by the seller —
@@ -151,10 +169,10 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
 
     // buyableAssets is the authoritative source for all asset metadata (type, nominal_value),
     // so it's used as a lookup for both BUY and SELL sides.
-    const selectedAsset   = buyableAssets.find((a) => a.id === form.assetId);
+    const selectedAsset = buyableAssets.find((a) => a.id === form.assetId);
     const selectedHolding = sellableHoldings.find((h) => h.asset_id === form.assetId);
-    const isBond          = selectedAsset?.type_slug === "BOND";
-    const nominalValue    = selectedAsset?.nominal_value ?? null;
+    const isBond = selectedAsset?.type_slug === "BOND";
+    const nominalValue = selectedAsset?.nominal_value ?? null;
 
     // When the asset changes, reset bond-specific fields so stale % values
     // from a previously selected bond don't carry over to a new selection.
@@ -172,14 +190,14 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
     // state updates so there's no useEffect feedback loop between them.
     function handlePriceChange(raw: string) {
         const price = parseFloat(raw);
-        const pct   = !isNaN(price) && nominalValue && nominalValue > 0
+        const pct = !isNaN(price) && nominalValue && nominalValue > 0
             ? ((price / nominalValue) * 100).toFixed(6)
             : "";
         setForm((prev) => ({ ...prev, pricePerUnit: raw, percentOfNominal: pct }));
     }
 
     function handlePercentChange(raw: string) {
-        const pct   = parseFloat(raw);
+        const pct = parseFloat(raw);
         const price = !isNaN(pct) && nominalValue && nominalValue > 0
             ? ((pct / 100) * nominalValue).toFixed(6)
             : "";
@@ -222,48 +240,55 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
         setSubmitting(true);
 
         try {
-            const qty          = parseFloat(form.quantity);
-            const price        = parseFloat(form.pricePerUnit);
+            const qty = parseFloat(form.quantity);
+            const price = parseFloat(form.pricePerUnit);
             const exchangeRate = parseFloat(form.exchangeRate) || 1;
-            const isBuy        = form.transactionType === "BUY";
+            const isBuy = form.transactionType === "BUY";
+            const valuationDate = form.transactedAt.slice(0, 10);
 
-            // ── 1. Insert the transaction ───────────────────────────────────
+            // ── 1. Snapshot the existing valuation before we overwrite it ───
+            // Captured now so undo can restore it exactly if needed.
+            const { data: existingValuation } = await supabase
+                .from("asset_valuations")
+                .select("balance_amount")
+                .eq("asset_id", form.assetId)
+                .eq("valuation_date", valuationDate)
+                .maybeSingle();
+            const previousBalanceAmount = existingValuation?.balance_amount ?? null;
+
+            // ── 2. Insert the transaction — select id back for undo ─────────
             const insert: TablesInsert<"asset_transactions"> = {
-                asset_id:          form.assetId,
-                transaction_type:  form.transactionType,
-                transacted_at:     new Date(form.transactedAt).toISOString(),
-                quantity:          qty,
-                price_per_unit:    price,
-                total_amount:      parseFloat(form.totalAmount),
-                fee:               parseFloat(form.fee) || 0,
-                currency:          form.currency,
-                exchange_rate:     exchangeRate,
-                broker:            form.broker || null,
-                notes:             form.notes  || null,
-                accrued_interest:  isBond ? (parseFloat(form.accruedInterest) || 0) : null,
+                asset_id: form.assetId,
+                transaction_type: form.transactionType,
+                transacted_at: new Date(form.transactedAt).toISOString(),
+                quantity: qty,
+                price_per_unit: price,
+                total_amount: parseFloat(form.totalAmount),
+                fee: parseFloat(form.fee) || 0,
+                currency: form.currency,
+                exchange_rate: exchangeRate,
+                broker: form.broker || null,
+                notes: form.notes || null,
+                accrued_interest: isBond ? (parseFloat(form.accruedInterest) || 0) : null,
             };
 
-            const { error: txError } = await supabase.from("asset_transactions").insert(insert);
+            const { data: txData, error: txError } = await supabase
+                .from("asset_transactions")
+                .insert(insert)
+                .select("id")
+                .single();
             if (txError) throw txError;
 
-            // ── 2. Upsert a valuation for the trade date ────────────────────
-            // balance_amount = new total position value in base currency.
-            // Uses clean price (pricePerUnit) — accrued interest is a settlement
-            // item, not part of the ongoing mark-to-market value.
-            // sellableHoldings reflects the state BEFORE this trade, so we
-            // calculate the new quantity from that baseline.
-            const currentQty    = sellableHoldings.find((h) => h.asset_id === form.assetId)?.quantity_held ?? 0;
-            const newQty        = isBuy ? currentQty + qty : currentQty - qty;
+            // ── 3. Upsert a valuation for the trade date ────────────────────
+            const currentQty = sellableHoldings.find((h) => h.asset_id === form.assetId)?.quantity_held ?? 0;
+            const newQty = isBuy ? currentQty + qty : currentQty - qty;
             const balanceAmount = newQty * price * exchangeRate;
-
-            // Date only (YYYY-MM-DD) — asset_valuations has one row per asset per day.
-            const valuationDate = form.transactedAt.slice(0, 10);
 
             const { error: valuationError } = await supabase
                 .from("asset_valuations")
                 .upsert(
                     {
-                        asset_id:       form.assetId,
+                        asset_id: form.assetId,
                         valuation_date: valuationDate,
                         balance_amount: balanceAmount,
                     },
@@ -271,13 +296,23 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                 );
 
             if (valuationError) {
-                // The transaction is already committed — log the warning but
-                // don't block the success flow. The user can add the valuation
-                // manually on the Valuation Ledger page if needed.
                 console.warn("Trade recorded but valuation upsert failed:", valuationError.message);
             }
 
-            onSuccess();
+            // ── 4. Hand off undo state to the parent page ───────────────────
+            const undoState: UndoState = {
+                transactionId: txData.id,
+                assetId: form.assetId,
+                assetName: selectedAsset?.name ?? form.assetId,
+                transactionType: form.transactionType,
+                quantity: qty,
+                pricePerUnit: price,
+                currency: form.currency,
+                valuationDate,
+                previousBalanceAmount,
+            };
+
+            onSuccess(undoState);
             onClose();
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Failed to record transaction.";
@@ -317,21 +352,19 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                     <div className="flex gap-2 p-1 bg-muted rounded-xl">
                         <button
                             onClick={() => switchType("BUY")}
-                            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
-                                !isSell
+                            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${!isSell
                                     ? "bg-emerald-600 text-white shadow"
                                     : "text-muted-foreground hover:text-foreground"
-                            }`}
+                                }`}
                         >
                             Buy
                         </button>
                         <button
                             onClick={() => switchType("SELL")}
-                            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
-                                isSell
+                            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${isSell
                                     ? "bg-rose-600 text-white shadow"
                                     : "text-muted-foreground hover:text-foreground"
-                            }`}
+                                }`}
                         >
                             Sell
                         </button>
@@ -675,11 +708,10 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                     <button
                         onClick={handleSubmit}
                         disabled={submitting || loadingAssets}
-                        className={`px-5 py-2 text-sm font-semibold rounded-lg text-white transition shadow disabled:opacity-50 ${
-                            isSell
+                        className={`px-5 py-2 text-sm font-semibold rounded-lg text-white transition shadow disabled:opacity-50 ${isSell
                                 ? "bg-rose-600 hover:bg-rose-700"
                                 : "bg-emerald-600 hover:bg-emerald-700"
-                        }`}
+                            }`}
                     >
                         {submitting ? "Submitting…" : isSell ? "Record Sell" : "Record Buy"}
                     </button>
@@ -740,13 +772,13 @@ function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumb
                             <tbody className="divide-y divide-border/40">
                                 {lots.map((lot, idx) => {
                                     const acquiredDate = new Date(lot.acquired_at);
-                                    const ageMs        = Date.now() - acquiredDate.getTime();
-                                    const ageDays      = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+                                    const ageMs = Date.now() - acquiredDate.getTime();
+                                    const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
 
                                     // Per-lot P&L using current price from the parent unrealized row.
                                     // current_price is in local currency; cost_per_unit_base is in base.
-                                    const currentPrice   = parent.current_price;
-                                    const currentValue   = currentPrice != null
+                                    const currentPrice = parent.current_price;
+                                    const currentValue = currentPrice != null
                                         ? lot.quantity_remaining * currentPrice
                                         : null;
                                     // Simpler: use the exchange rates already baked into the parent view.
@@ -757,11 +789,11 @@ function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumb
                                     const lotCurrentValueBase = currentPriceBase != null
                                         ? lot.quantity_remaining * currentPriceBase
                                         : null;
-                                    const lotCostBasisBase    = lot.quantity_remaining * lot.cost_per_unit_base;
-                                    const lotPnlBase          = lotCurrentValueBase != null
+                                    const lotCostBasisBase = lot.quantity_remaining * lot.cost_per_unit_base;
+                                    const lotPnlBase = lotCurrentValueBase != null
                                         ? lotCurrentValueBase - lotCostBasisBase
                                         : null;
-                                    const lotPnlPct           = lotPnlBase != null && lotCostBasisBase > 0
+                                    const lotPnlPct = lotPnlBase != null && lotCostBasisBase > 0
                                         ? (lotPnlBase / lotCostBasisBase) * 100
                                         : null;
                                     const isPositive = (lotPnlBase ?? 0) >= 0;
@@ -784,11 +816,10 @@ function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumb
                                                 </div>
                                             </td>
                                             <td className={cellCls + " text-muted-foreground"}>
-                                                <span className={`inline-block px-1.5 py-0.5 rounded font-mono text-[10px] ${
-                                                    ageDays >= 365
+                                                <span className={`inline-block px-1.5 py-0.5 rounded font-mono text-[10px] ${ageDays >= 365
                                                         ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400"
                                                         : "bg-muted text-muted-foreground"
-                                                }`}>
+                                                    }`}>
                                                     {ageDays >= 365
                                                         ? `${(ageDays / 365).toFixed(1)}y`
                                                         : `${ageDays}d`}
@@ -910,7 +941,7 @@ interface RealizedLotSubRowsProps {
 }
 
 function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, baseCurrency }: RealizedLotSubRowsProps) {
-    const qtyDp   = group.asset_type === "CRYPTO" ? 6 : 4;
+    const qtyDp = group.asset_type === "CRYPTO" ? 6 : 4;
     const cellCls = "px-3 py-2.5 text-right font-mono";
 
     return (
@@ -933,9 +964,9 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
                         </thead>
                         <tbody className="divide-y divide-border/40">
                             {group.lots.map((lot, idx) => {
-                                const pnl        = lot.realized_pnl_base ?? 0;
+                                const pnl = lot.realized_pnl_base ?? 0;
                                 const isPositive = pnl >= 0;
-                                const pct        = lot.realized_pnl_pct;
+                                const pct = lot.realized_pnl_pct;
 
                                 return (
                                     <tr key={lot.lot_id} className="hover:bg-muted/30 transition">
@@ -955,11 +986,10 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
                                             </div>
                                         </td>
                                         <td className={cellCls}>
-                                            <span className={`inline-block px-1.5 py-0.5 rounded font-mono text-[10px] ${
-                                                lot.is_long_term
+                                            <span className={`inline-block px-1.5 py-0.5 rounded font-mono text-[10px] ${lot.is_long_term
                                                     ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400"
                                                     : "bg-muted text-muted-foreground"
-                                            }`}>
+                                                }`}>
                                                 {lot.held_days >= 365
                                                     ? `${(lot.held_days / 365).toFixed(1)}y`
                                                     : `${lot.held_days}d`}
@@ -1039,23 +1069,29 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
 // ---------------------------------------------------------------------------
 
 export default function TradingJournalPage() {
-    const [activeTab, setActiveTab]       = useState<"unrealized" | "realized">("unrealized");
+    const [activeTab, setActiveTab] = useState<"unrealized" | "realized">("unrealized");
     const [selectedType, setSelectedType] = useState<string>("ALL");
     const [showTradeModal, setShowTradeModal] = useState(false);
 
     const [unrealizedData, setUnrealizedData] = useState<UnrealizedPnLRow[]>([]);
-    const [realizedData, setRealizedData]     = useState<RealizedPnLRow[]>([]);
-    const [loading, setLoading]               = useState(true);
-    const [error, setError]                   = useState<string | null>(null);
+    const [realizedData, setRealizedData] = useState<RealizedPnLRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     // ── Lot expansion state (open positions) ─────────────────────────────────
     const [expandedAssets, setExpandedAssets] = useState<Set<string>>(new Set());
-    const [lotsByAsset, setLotsByAsset]       = useState<Record<string, TaxLotRow[]>>({});
-    const [loadingLots, setLoadingLots]       = useState<Set<string>>(new Set());
+    const [lotsByAsset, setLotsByAsset] = useState<Record<string, TaxLotRow[]>>({});
+    const [loadingLots, setLoadingLots] = useState<Set<string>>(new Set());
 
     // ── Sell expansion state (closed history) ─────────────────────────────────
     // No async fetch needed — realized data is already in memory.
     const [expandedSells, setExpandedSells] = useState<Set<string>>(new Set());
+
+    // ── Undo state ────────────────────────────────────────────────────────────
+    const [pendingUndo, setPendingUndo] = useState<UndoState | null>(null);
+    const [timeLeft, setTimeLeft] = useState(UNDO_WINDOW_SECONDS);
+    const [undoing, setUndoing] = useState(false);
+    const [undoError, setUndoError] = useState<string | null>(null);
 
     // ── Data fetching — extracted so it can be called after a trade ──────────
     const fetchJournalData = useCallback(async () => {
@@ -1076,10 +1112,10 @@ export default function TradingJournalPage() {
             ]);
 
             if (unrealizedResult.error) throw unrealizedResult.error;
-            if (realizedResult.error)   throw realizedResult.error;
+            if (realizedResult.error) throw realizedResult.error;
 
             setUnrealizedData((unrealizedResult.data as UnrealizedPnLRow[]) ?? []);
-            setRealizedData((realizedResult.data   as RealizedPnLRow[])     ?? []);
+            setRealizedData((realizedResult.data as RealizedPnLRow[]) ?? []);
 
             // Stale lot cache: clear any expanded assets so data is re-fetched
             // if the user re-expands after recording a new trade.
@@ -1151,6 +1187,125 @@ export default function TradingJournalPage() {
         });
     }, []);
 
+    // ── Undo countdown — keyed on transactionId so a new trade restarts it ───
+    useEffect(() => {
+        if (!pendingUndo) return;
+        setTimeLeft(UNDO_WINDOW_SECONDS);
+        const interval = setInterval(() => {
+            setTimeLeft((t) => {
+                if (t <= 1) {
+                    setPendingUndo(null);
+                    return UNDO_WINDOW_SECONDS;
+                }
+                return t - 1;
+            });
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [pendingUndo?.transactionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handleUndo = useCallback(async () => {
+        if (!pendingUndo) return;
+        setUndoing(true);
+        setUndoError(null);
+        try {
+            const txId = pendingUndo.transactionId;
+            const isBuy = pendingUndo.transactionType === "BUY";
+
+            if (isBuy) {
+                // A BUY creates one or more tax_lots (transaction_id → asset_transactions.id).
+                // Any lot_matches referencing those lots must be removed first.
+                const { data: lots } = await supabase
+                    .from("tax_lots")
+                    .select("id")
+                    .eq("transaction_id", txId);
+
+                if (lots && lots.length > 0) {
+                    const lotIds = lots.map((l) => l.id);
+                    // Delete lot_matches first (they reference tax_lots).
+                    // Normally empty for the last BUY, but guard anyway.
+                    await supabase
+                        .from("lot_matches")
+                        .delete()
+                        .in("lot_id", lotIds);
+                    // Now safe to delete the lots themselves.
+                    await supabase
+                        .from("tax_lots")
+                        .delete()
+                        .in("id", lotIds);
+                }
+            } else {
+                // A SELL creates lot_matches (sell_transaction_id → asset_transactions.id)
+                // and partially consumes tax_lots by reducing quantity_remaining.
+                // We must restore quantity_remaining before deleting the matches.
+                const { data: matches } = await supabase
+                    .from("lot_matches")
+                    .select("lot_id, quantity_matched")
+                    .eq("sell_transaction_id", txId);
+
+                if (matches && matches.length > 0) {
+                    // Batch-fetch current quantity_remaining for all affected lots.
+                    const lotIds = matches.map((m) => m.lot_id);
+                    const { data: lots } = await supabase
+                        .from("tax_lots")
+                        .select("id, quantity_remaining")
+                        .in("id", lotIds);
+
+                    if (lots) {
+                        const remainingById = new Map(lots.map((l) => [l.id, l.quantity_remaining]));
+                        // Restore each lot sequentially (N is small in practice).
+                        for (const match of matches) {
+                            const current = remainingById.get(match.lot_id) ?? 0;
+                            await supabase
+                                .from("tax_lots")
+                                .update({ quantity_remaining: current + match.quantity_matched })
+                                .eq("id", match.lot_id);
+                        }
+                    }
+                    // Safe to delete the matches now that lots are restored.
+                    await supabase
+                        .from("lot_matches")
+                        .delete()
+                        .eq("sell_transaction_id", txId);
+                }
+            }
+
+            // All FK dependents are gone — delete the transaction itself.
+            const { error: deleteError } = await supabase
+                .from("asset_transactions")
+                .delete()
+                .eq("id", txId);
+            if (deleteError) throw deleteError;
+
+            // Restore or remove the valuation we wrote on the trade date.
+            if (pendingUndo.previousBalanceAmount === null) {
+                await supabase
+                    .from("asset_valuations")
+                    .delete()
+                    .eq("asset_id", pendingUndo.assetId)
+                    .eq("valuation_date", pendingUndo.valuationDate);
+            } else {
+                await supabase
+                    .from("asset_valuations")
+                    .upsert(
+                        {
+                            asset_id: pendingUndo.assetId,
+                            valuation_date: pendingUndo.valuationDate,
+                            balance_amount: pendingUndo.previousBalanceAmount,
+                        },
+                        { onConflict: "asset_id, valuation_date" },
+                    );
+            }
+
+            setPendingUndo(null);
+            void fetchJournalData();
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Undo failed — please check the transaction log.";
+            setUndoError(message);
+        } finally {
+            setUndoing(false);
+        }
+    }, [pendingUndo, fetchJournalData]);
+
     // ── Format helpers ────────────────────────────────────────────────────────
     const formatCurrency = (val: number, currency = "EUR") =>
         new Intl.NumberFormat("en-US", { style: "currency", currency }).format(val);
@@ -1177,27 +1332,27 @@ export default function TradingJournalPage() {
             const g = map.get(row.sell_transaction_id);
             if (g) {
                 g.lots.push(row);
-                g.total_quantity_sold     += row.quantity_sold;
-                g.total_cost_basis_base   += row.cost_basis_base;
-                g.total_proceeds_base     += row.proceeds_base;
+                g.total_quantity_sold += row.quantity_sold;
+                g.total_cost_basis_base += row.cost_basis_base;
+                g.total_proceeds_base += row.proceeds_base;
                 g.total_realized_pnl_base += row.realized_pnl_base ?? 0;
-                g.total_fx_effect         += row.fx_effect ?? 0;
+                g.total_fx_effect += row.fx_effect ?? 0;
             } else {
                 map.set(row.sell_transaction_id, {
-                    sell_transaction_id:    row.sell_transaction_id,
-                    asset_id:               row.asset_id,
-                    asset_name:             row.asset_name,
-                    asset_type:             row.asset_type,
-                    ticker:                 row.ticker,
-                    isin:                   row.isin ?? null,
-                    sold_at:                row.sold_at,
-                    total_quantity_sold:    row.quantity_sold,
-                    total_cost_basis_base:  row.cost_basis_base,
-                    total_proceeds_base:    row.proceeds_base,
+                    sell_transaction_id: row.sell_transaction_id,
+                    asset_id: row.asset_id,
+                    asset_name: row.asset_name,
+                    asset_type: row.asset_type,
+                    ticker: row.ticker,
+                    isin: row.isin ?? null,
+                    sold_at: row.sold_at,
+                    total_quantity_sold: row.quantity_sold,
+                    total_cost_basis_base: row.cost_basis_base,
+                    total_proceeds_base: row.proceeds_base,
                     total_realized_pnl_base: row.realized_pnl_base ?? 0,
-                    total_fx_effect:        row.fx_effect ?? 0,
-                    realized_pnl_pct:       null, // computed below
-                    lots:                   [row],
+                    total_fx_effect: row.fx_effect ?? 0,
+                    realized_pnl_pct: null, // computed below
+                    lots: [row],
                 });
             }
         }
@@ -1212,11 +1367,11 @@ export default function TradingJournalPage() {
     const baseCurrency = unrealizedData[0]?.base_currency ?? "EUR";
 
     // Null-safe aggregations (view columns are nullable when no price data exists)
-    const totalCostBase         = filteredUnrealized.reduce((acc, r) => acc + (r.total_cost_base           ?? 0), 0);
-    const totalCurrentValueBase = filteredUnrealized.reduce((acc, r) => acc + (r.current_value_base        ?? 0), 0);
-    const totalUnrealizedBase   = filteredUnrealized.reduce((acc, r) => acc + (r.unrealized_pnl_base       ?? 0), 0);
-    const totalRealizedBase     = filteredRealized.reduce(  (acc, r) => acc + (r.realized_pnl_base         ?? 0), 0);
-    const totalUnrealizedPct    = totalCostBase > 0 ? (totalUnrealizedBase / totalCostBase) * 100 : 0;
+    const totalCostBase = filteredUnrealized.reduce((acc, r) => acc + (r.total_cost_base ?? 0), 0);
+    const totalCurrentValueBase = filteredUnrealized.reduce((acc, r) => acc + (r.current_value_base ?? 0), 0);
+    const totalUnrealizedBase = filteredUnrealized.reduce((acc, r) => acc + (r.unrealized_pnl_base ?? 0), 0);
+    const totalRealizedBase = filteredRealized.reduce((acc, r) => acc + (r.realized_pnl_base ?? 0), 0);
+    const totalUnrealizedPct = totalCostBase > 0 ? (totalUnrealizedBase / totalCostBase) * 100 : 0;
 
     // ── Loading / error states ────────────────────────────────────────────────
     if (loading) {
@@ -1256,8 +1411,88 @@ export default function TradingJournalPage() {
                 <TradeModal
                     baseCurrency={baseCurrency}
                     onClose={() => setShowTradeModal(false)}
-                    onSuccess={() => void fetchJournalData()}
+                    onSuccess={(undoState) => {
+                        setPendingUndo(undoState);
+                        setUndoError(null);
+                        void fetchJournalData();
+                    }}
                 />
+            )}
+
+            {/* ── Undo toast ── */}
+            {pendingUndo && (
+                <div className="fixed bottom-6 right-6 z-50 w-full max-w-sm shadow-2xl rounded-2xl overflow-hidden border border-border bg-card">
+                    {/* Progress bar */}
+                    <div className="h-1 bg-muted">
+                        <div
+                            className="h-full bg-emerald-500 transition-all duration-1000 ease-linear"
+                            style={{ width: `${(timeLeft / UNDO_WINDOW_SECONDS) * 100}%` }}
+                        />
+                    </div>
+
+                    <div className="p-4 space-y-3">
+                        {/* Header */}
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded ${pendingUndo.transactionType === "BUY"
+                                        ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400"
+                                        : "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400"
+                                    }`}>
+                                    {pendingUndo.transactionType}
+                                </span>
+                                <span className="text-sm font-semibold text-foreground">
+                                    Trade Recorded
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => setPendingUndo(null)}
+                                aria-label="Dismiss"
+                                className="text-muted-foreground hover:text-foreground transition text-lg leading-none mt-0.5"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        {/* Trade summary */}
+                        <p className="text-xs text-muted-foreground font-mono">
+                            {pendingUndo.quantity} ×{" "}
+                            <span className="text-foreground font-semibold">{pendingUndo.assetName}</span>
+                            {" @ "}
+                            {new Intl.NumberFormat("en-US", {
+                                style: "currency",
+                                currency: pendingUndo.currency,
+                            }).format(pendingUndo.pricePerUnit)}
+                        </p>
+
+                        {/* Error (if undo itself failed) */}
+                        {undoError && (
+                            <p className="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-lg px-3 py-2">
+                                {undoError}
+                            </p>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-muted-foreground/70 tabular-nums">
+                                Undo available for {timeLeft}s
+                            </span>
+                            <button
+                                onClick={() => void handleUndo()}
+                                disabled={undoing}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800/50 transition disabled:opacity-50"
+                            >
+                                {undoing ? (
+                                    <>
+                                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
+                                        Undoing…
+                                    </>
+                                ) : (
+                                    <>↩ Undo</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             <div className="max-w-7xl mx-auto space-y-8">
@@ -1328,21 +1563,19 @@ export default function TradingJournalPage() {
                             Unrealized Performance
                         </span>
                         <div
-                            className={`text-2xl font-bold mt-2 ${
-                                totalUnrealizedBase >= 0
+                            className={`text-2xl font-bold mt-2 ${totalUnrealizedBase >= 0
                                     ? "text-emerald-600 dark:text-emerald-400"
                                     : "text-rose-600 dark:text-rose-400"
-                            }`}
+                                }`}
                         >
                             {totalUnrealizedBase >= 0 ? "+" : ""}
                             {formatCurrency(totalUnrealizedBase, baseCurrency)}
                         </div>
                         <p
-                            className={`text-xs mt-1 font-medium ${
-                                totalUnrealizedBase >= 0
+                            className={`text-xs mt-1 font-medium ${totalUnrealizedBase >= 0
                                     ? "text-emerald-600 dark:text-emerald-500"
                                     : "text-rose-600 dark:text-rose-500"
-                            }`}
+                                }`}
                         >
                             {totalUnrealizedPct >= 0 ? "+" : ""}
                             {formatNumber(totalUnrealizedPct)}% ROI
@@ -1354,11 +1587,10 @@ export default function TradingJournalPage() {
                             Realized Performance Summary
                         </span>
                         <div
-                            className={`text-2xl font-bold mt-2 ${
-                                totalRealizedBase >= 0
+                            className={`text-2xl font-bold mt-2 ${totalRealizedBase >= 0
                                     ? "text-emerald-600 dark:text-emerald-400"
                                     : "text-rose-600 dark:text-rose-400"
-                            }`}
+                                }`}
                         >
                             {totalRealizedBase >= 0 ? "+" : ""}
                             {formatCurrency(totalRealizedBase, baseCurrency)}
@@ -1373,21 +1605,19 @@ export default function TradingJournalPage() {
                 <div className="flex border-b border-border">
                     <button
                         onClick={() => setActiveTab("unrealized")}
-                        className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
-                            activeTab === "unrealized"
+                        className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${activeTab === "unrealized"
                                 ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-muted/40"
                                 : "border-transparent text-muted-foreground hover:text-foreground"
-                        }`}
+                            }`}
                     >
                         Open Positions ({filteredUnrealized.length})
                     </button>
                     <button
                         onClick={() => setActiveTab("realized")}
-                        className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
-                            activeTab === "realized"
+                        className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${activeTab === "realized"
                                 ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-muted/40"
                                 : "border-transparent text-muted-foreground hover:text-foreground"
-                        }`}
+                            }`}
                     >
                         Closed History ({groupedRealized.length})
                     </button>
@@ -1423,14 +1653,14 @@ export default function TradingJournalPage() {
                                         </tr>
                                     ) : (
                                         filteredUnrealized.map((row) => {
-                                            const pnlBase    = row.unrealized_pnl_base ?? 0;
+                                            const pnlBase = row.unrealized_pnl_base ?? 0;
                                             const isPositive = pnlBase >= 0;
-                                            const qtyDp      = row.asset_type === "CRYPTO" ? 6 : 4;
-                                            const fxEffect   = row.fx_effect ?? 0;
+                                            const qtyDp = row.asset_type === "CRYPTO" ? 6 : 4;
+                                            const fxEffect = row.fx_effect ?? 0;
                                             const isExpanded = expandedAssets.has(row.asset_id);
-                                            const isLoading  = loadingLots.has(row.asset_id);
-                                            const lots       = lotsByAsset[row.asset_id];
-                                            const lotCount   = lots?.length ?? 0;
+                                            const isLoading = loadingLots.has(row.asset_id);
+                                            const lots = lotsByAsset[row.asset_id];
+                                            const lotCount = lots?.length ?? 0;
 
                                             return (
                                                 <React.Fragment key={row.asset_id}>
@@ -1553,12 +1783,12 @@ export default function TradingJournalPage() {
                                         </tr>
                                     ) : (
                                         groupedRealized.map((group) => {
-                                            const pnl        = group.total_realized_pnl_base;
+                                            const pnl = group.total_realized_pnl_base;
                                             const isPositive = pnl >= 0;
-                                            const fxEffect   = group.total_fx_effect;
-                                            const qtyDp      = group.asset_type === "CRYPTO" ? 6 : 4;
+                                            const fxEffect = group.total_fx_effect;
+                                            const qtyDp = group.asset_type === "CRYPTO" ? 6 : 4;
                                             const isExpanded = expandedSells.has(group.sell_transaction_id);
-                                            const multiLot   = group.lots.length > 1;
+                                            const multiLot = group.lots.length > 1;
 
                                             return (
                                                 <React.Fragment key={group.sell_transaction_id}>
