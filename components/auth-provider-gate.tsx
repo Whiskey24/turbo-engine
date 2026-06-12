@@ -1,10 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { User } from "@supabase/supabase-js";
 import SidebarNav from "@/components/sidebar-nav";
 
 import { supabase } from "@/lib/supabase";
+
+// 10 minutes in milliseconds
+const IDLE_TIMEOUT = 10 * 60 * 1000;
 
 export default function AuthProviderGate({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
@@ -32,11 +35,52 @@ export default function AuthProviderGate({ children }: { children: React.ReactNo
             if (!session) {
                 setUser(null);
                 if (pathname !== "/") router.push("/");
+            } else {
+                setUser(session.user);
             }
         });
 
         return () => subscription.unsubscribe();
     }, [router, pathname]);
+
+    // --- IDLE TIMER LOGIC ---
+    useEffect(() => {
+        // Only track activity if a user is actively logged in
+        if (!user) return;
+
+        let timeoutId: ReturnType<typeof setTimeout>;
+
+        const handleLogout = async () => {
+            console.log("User idle for 10 minutes. Logging out secure session...");
+            // Calling signOut triggers onAuthStateChange above, handles resetting user state and redirecting to "/"
+            await supabase.auth.signOut();
+        };
+
+        const resetTimer = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = setTimeout(handleLogout, IDLE_TIMEOUT);
+        };
+
+        // User actions that reset the 10-minute countdown
+        const activityEvents = ["mousemove", "keydown", "mousedown", "touchstart", "scroll"];
+
+        // Start the timer immediately upon login/mount
+        resetTimer();
+
+        // Attach listeners for user activity
+        activityEvents.forEach((event) => {
+            window.addEventListener(event, resetTimer);
+        });
+
+        // Cleanup event listeners and timers if user logs out or leaves
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            activityEvents.forEach((event) => {
+                window.removeEventListener(event, resetTimer);
+            });
+        };
+    }, [user]);
+    // ------------------------
 
     // If we haven't mounted on the client yet, render an empty structure 
     // that matches the server's static body exactly.
