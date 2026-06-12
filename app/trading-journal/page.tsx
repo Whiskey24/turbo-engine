@@ -956,6 +956,8 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
                                 <th className="px-3 py-2 text-right font-semibold">Held</th>
                                 <th className="px-3 py-2 text-right font-semibold">Qty from Lot</th>
                                 <th className="px-3 py-2 text-right font-semibold">Cost / Unit</th>
+                                <th className="px-3 py-2 text-right font-semibold">Sell / Unit</th>
+                                <th className="px-3 py-2 text-right font-semibold">Fees</th>
                                 <th className="px-3 py-2 text-right font-semibold">Cost Basis</th>
                                 <th className="px-3 py-2 text-right font-semibold">Proceeds</th>
                                 <th className="px-3 py-2 text-right font-semibold">Realized P&amp;L</th>
@@ -1009,6 +1011,25 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
                                                 : "—"
                                             }
                                         </td>
+                                        <td className={cellCls + " text-foreground/80"}>
+                                            {lot.sell_price_per_unit != null
+                                                ? formatCurrency(lot.sell_price_per_unit, baseCurrency)
+                                                : lot.quantity_sold > 0
+                                                    ? formatCurrency(lot.proceeds_base / lot.quantity_sold, baseCurrency)
+                                                    : "—"
+                                            }
+                                            {group.asset_type === "BOND" && lot.sell_price_per_unit != null && lot.nominal_value != null && lot.nominal_value > 0 && (
+                                                <div className="text-[10px] text-muted-foreground/70 mt-0.5">
+                                                    {formatNumber((lot.sell_price_per_unit / lot.nominal_value) * 100, 2)}%
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className={cellCls + " text-muted-foreground"}>
+                                            {lot.fee_base != null
+                                                ? formatCurrency(lot.fee_base, baseCurrency)
+                                                : "—"
+                                            }
+                                        </td>
                                         <td className={cellCls + " text-muted-foreground"}>
                                             {formatCurrency(lot.cost_basis_base, baseCurrency)}
                                         </td>
@@ -1038,6 +1059,23 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
                                         {formatNumber(group.total_quantity_sold, qtyDp)}
                                     </td>
                                     <td />
+                                    <td className={cellCls + " font-semibold text-foreground/70"}>
+                                        {/* Weighted-avg sell price across all lots */}
+                                        {group.total_quantity_sold > 0
+                                            ? formatCurrency(group.total_proceeds_base / group.total_quantity_sold, baseCurrency)
+                                            : "—"
+                                        }
+                                    </td>
+                                    <td className={cellCls + " font-semibold text-foreground/70"}>
+                                        {/* Total fees — only shown when the field is available on all lots */}
+                                        {group.lots.every((l) => (l as RealizedPnLRow & { fee_base?: number | null }).fee_base != null)
+                                            ? formatCurrency(
+                                                group.lots.reduce((s, l) => s + ((l as RealizedPnLRow & { fee_base?: number | null }).fee_base ?? 0), 0),
+                                                baseCurrency,
+                                            )
+                                            : "—"
+                                        }
+                                    </td>
                                     <td className={cellCls + " font-semibold text-foreground/70"}>
                                         {formatCurrency(group.total_cost_basis_base, baseCurrency)}
                                     </td>

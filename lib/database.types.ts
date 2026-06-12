@@ -574,6 +574,8 @@ export type Database = {
           realized_pnl_pct: number | null
           fx_effect: number
           nominal_value: number | null   // bond face/par value per unit; null for non-bonds
+          sell_price_per_unit: number
+          fee_base: number
         }
         Insert: never
         Update: never
