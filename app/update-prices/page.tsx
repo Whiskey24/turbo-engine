@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Database } from "@/lib/database.types";
+import { getUserSettings } from "@/lib/database";
 
 type AssetRow = Database["public"]["Tables"]["portfolio_assets"]["Row"];
 type PriceRow = Database["public"]["Tables"]["asset_prices"]["Row"];
@@ -37,6 +38,12 @@ const TYPE_BADGES: Record<string, string> = {
     BOND: "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/50",
 };
 
+const formatDate = (dateStr: string, locale: string) => {
+    if (!dateStr) return "";
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(new Date(year, month - 1, day));
+};
+
 export default function UpdatePricesPage() {
     const [assets, setAssets] = useState<EnhancedAssetItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -55,6 +62,8 @@ export default function UpdatePricesPage() {
 
     // Fixed Nominal Value state (defaults to 100 if missing from asset configuration)
     const [fixedNominal, setFixedNominal] = useState(100);
+
+    const [locale, setLocale] = useState("en-US");
 
     const [modalDate, setModalDate] = useState(() => {
         const today = new Date();
@@ -129,6 +138,15 @@ export default function UpdatePricesPage() {
             setLoading(false);
         }
     }
+
+    // ── Load user settings ────────────────────────────────────────────────────
+    useEffect(() => {
+        async function loadSettings() {
+            const settings = await getUserSettings();
+            if (settings?.locale) setLocale(settings.locale);
+        }
+        void loadSettings();
+    }, []);
 
     useEffect(() => {
         loadPriceMatrix();
@@ -387,7 +405,7 @@ export default function UpdatePricesPage() {
 
                                             <td className="p-4 text-right font-mono text-foreground font-medium">
                                                 {item.last_price !== null
-                                                    ? new Intl.NumberFormat("en-US", {
+                                                    ? new Intl.NumberFormat(locale, {
                                                         style: "currency",
                                                         currency: item.currency,
                                                         minimumFractionDigits: 2,
@@ -397,7 +415,7 @@ export default function UpdatePricesPage() {
                                             </td>
 
                                             <td className="p-4 text-right font-mono text-muted-foreground">
-                                                {item.last_price_date || "—"}
+                                                {item.last_price_date ? formatDate(item.last_price_date, locale) : "—"}
                                             </td>
 
                                             <td className="p-4 text-right">

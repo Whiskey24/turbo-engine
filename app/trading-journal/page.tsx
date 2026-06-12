@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Tables, TablesInsert } from "@/lib/database";
+import { getUserSettings } from "@/lib/database";
 
 // ---------------------------------------------------------------------------
 // Types — use generated DB view/table types directly instead of duplicating
@@ -730,12 +731,13 @@ interface LotSubRowsProps {
     loading: boolean;
     parent: UnrealizedPnLRow;
     colSpan: number;
-    formatCurrency: (val: number, currency?: string) => string;
+    formatCurrency: (val: number, locale: string) => string;
     formatNumber: (val: number, decimals?: number) => string;
     baseCurrency: string;
+    locale: string;
 }
 
-function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumber, baseCurrency }: LotSubRowsProps) {
+function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumber, baseCurrency, locale }: LotSubRowsProps) {
     const qtyDp = parent.asset_type === "CRYPTO" ? 6 : 4;
 
     const cellCls = "px-3 py-2.5 text-right font-mono";
@@ -834,23 +836,23 @@ function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumb
                                                 )}
                                             </td>
                                             <td className={cellCls + " text-foreground/80"}>
-                                                {formatCurrency(lot.cost_per_unit, lot.currency)}
+                                                {formatCurrency(lot.cost_per_unit, locale)}
                                                 <div className="text-[10px] text-muted-foreground/70 mt-0.5">
-                                                    {formatCurrency(lot.cost_per_unit_base, baseCurrency)} base
+                                                    {formatCurrency(lot.cost_per_unit_base, locale)} base
                                                 </div>
                                             </td>
                                             <td className={cellCls + " text-muted-foreground"}>
-                                                {formatCurrency(lotCostBasisBase, baseCurrency)}
+                                                {formatCurrency(lotCostBasisBase, locale)}
                                             </td>
                                             <td className={cellCls + " text-foreground/80"}>
                                                 {lotCurrentValueBase != null
-                                                    ? formatCurrency(lotCurrentValueBase, baseCurrency)
+                                                    ? formatCurrency(lotCurrentValueBase, locale)
                                                     : <span className="text-muted-foreground/60">—</span>
                                                 }
                                             </td>
                                             <td className={`${cellCls} font-semibold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                                                 {lotPnlBase != null
-                                                    ? `${isPositive ? "+" : ""}${formatCurrency(lotPnlBase, baseCurrency)}`
+                                                    ? `${isPositive ? "+" : ""}${formatCurrency(lotPnlBase, locale)}`
                                                     : <span className="text-muted-foreground/60">—</span>
                                                 }
                                             </td>
@@ -880,18 +882,18 @@ function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumb
                                         <td className={cellCls + " font-semibold text-foreground/70"}>
                                             {formatCurrency(
                                                 lots.reduce((s, l) => s + l.quantity_remaining * l.cost_per_unit_base, 0),
-                                                baseCurrency,
+                                                locale,
                                             )}
                                         </td>
                                         <td className={cellCls + " font-semibold text-foreground/70"}>
                                             {parent.current_value_base != null
-                                                ? formatCurrency(parent.current_value_base, baseCurrency)
+                                                ? formatCurrency(parent.current_value_base, locale)
                                                 : "—"
                                             }
                                         </td>
                                         <td className={`${cellCls} font-semibold ${(parent.unrealized_pnl_base ?? 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                                             {parent.unrealized_pnl_base != null
-                                                ? `${parent.unrealized_pnl_base >= 0 ? "+" : ""}${formatCurrency(parent.unrealized_pnl_base, baseCurrency)}`
+                                                ? `${parent.unrealized_pnl_base >= 0 ? "+" : ""}${formatCurrency(parent.unrealized_pnl_base, locale)}`
                                                 : "—"
                                             }
                                         </td>
@@ -935,12 +937,13 @@ interface RealizedGroup {
 interface RealizedLotSubRowsProps {
     group: RealizedGroup;
     colSpan: number;
-    formatCurrency: (val: number, currency?: string) => string;
+    formatCurrency: (val: number, locale: string) => string;
     formatNumber: (val: number, decimals?: number) => string;
     baseCurrency: string;
+    locale: string;
 }
 
-function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, baseCurrency }: RealizedLotSubRowsProps) {
+function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, baseCurrency, locale }: RealizedLotSubRowsProps) {
     const qtyDp = group.asset_type === "CRYPTO" ? 6 : 4;
     const cellCls = "px-3 py-2.5 text-right font-mono";
 
@@ -1007,15 +1010,15 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
                                         </td>
                                         <td className={cellCls + " text-foreground/80"}>
                                             {lot.quantity_sold > 0
-                                                ? formatCurrency(lot.cost_basis_base / lot.quantity_sold, baseCurrency)
+                                                ? formatCurrency(lot.cost_basis_base / lot.quantity_sold, locale)
                                                 : "—"
                                             }
                                         </td>
                                         <td className={cellCls + " text-foreground/80"}>
                                             {lot.sell_price_per_unit != null
-                                                ? formatCurrency(lot.sell_price_per_unit, baseCurrency)
+                                                ? formatCurrency(lot.sell_price_per_unit, locale)
                                                 : lot.quantity_sold > 0
-                                                    ? formatCurrency(lot.proceeds_base / lot.quantity_sold, baseCurrency)
+                                                    ? formatCurrency(lot.proceeds_base / lot.quantity_sold, locale)
                                                     : "—"
                                             }
                                             {group.asset_type === "BOND" && lot.sell_price_per_unit != null && lot.nominal_value != null && lot.nominal_value > 0 && (
@@ -1026,18 +1029,18 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
                                         </td>
                                         <td className={cellCls + " text-muted-foreground"}>
                                             {lot.fee_base != null
-                                                ? formatCurrency(lot.fee_base, baseCurrency)
+                                                ? formatCurrency(lot.fee_base, locale)
                                                 : "—"
                                             }
                                         </td>
                                         <td className={cellCls + " text-muted-foreground"}>
-                                            {formatCurrency(lot.cost_basis_base, baseCurrency)}
+                                            {formatCurrency(lot.cost_basis_base, locale)}
                                         </td>
                                         <td className={cellCls + " text-foreground/80"}>
-                                            {formatCurrency(lot.proceeds_base, baseCurrency)}
+                                            {formatCurrency(lot.proceeds_base, locale)}
                                         </td>
                                         <td className={`${cellCls} font-semibold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                                            {isPositive ? "+" : ""}{formatCurrency(pnl, baseCurrency)}
+                                            {isPositive ? "+" : ""}{formatCurrency(pnl, locale)}
                                         </td>
                                         <td className={`${cellCls} font-bold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                                             {pct != null
@@ -1062,7 +1065,7 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
                                     <td className={cellCls + " font-semibold text-foreground/70"}>
                                         {/* Weighted-avg sell price across all lots */}
                                         {group.total_quantity_sold > 0
-                                            ? formatCurrency(group.total_proceeds_base / group.total_quantity_sold, baseCurrency)
+                                            ? formatCurrency(group.total_proceeds_base / group.total_quantity_sold, locale)
                                             : "—"
                                         }
                                     </td>
@@ -1071,20 +1074,20 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
                                         {group.lots.every((l) => (l as RealizedPnLRow & { fee_base?: number | null }).fee_base != null)
                                             ? formatCurrency(
                                                 group.lots.reduce((s, l) => s + ((l as RealizedPnLRow & { fee_base?: number | null }).fee_base ?? 0), 0),
-                                                baseCurrency,
+                                                locale,
                                             )
                                             : "—"
                                         }
                                     </td>
                                     <td className={cellCls + " font-semibold text-foreground/70"}>
-                                        {formatCurrency(group.total_cost_basis_base, baseCurrency)}
+                                        {formatCurrency(group.total_cost_basis_base, locale)}
                                     </td>
                                     <td className={cellCls + " font-semibold text-foreground/70"}>
-                                        {formatCurrency(group.total_proceeds_base, baseCurrency)}
+                                        {formatCurrency(group.total_proceeds_base, locale)}
                                     </td>
                                     <td className={`${cellCls} font-semibold ${group.total_realized_pnl_base >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                                         {group.total_realized_pnl_base >= 0 ? "+" : ""}
-                                        {formatCurrency(group.total_realized_pnl_base, baseCurrency)}
+                                        {formatCurrency(group.total_realized_pnl_base, locale)}
                                     </td>
                                     <td className={`${cellCls} font-bold ${(group.realized_pnl_pct ?? 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                                         {group.realized_pnl_pct != null
@@ -1115,6 +1118,16 @@ export default function TradingJournalPage() {
     const [realizedData, setRealizedData] = useState<RealizedPnLRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [locale, setLocale] = useState("en-US");
+
+    // ── Load user settings ────────────────────────────────────────────────────
+    useEffect(() => {
+        async function loadSettings() {
+            const settings = await getUserSettings();
+            if (settings?.locale) setLocale(settings.locale);
+        }
+        void loadSettings();
+    }, []);
 
     // ── Lot expansion state (open positions) ─────────────────────────────────
     const [expandedAssets, setExpandedAssets] = useState<Set<string>>(new Set());
@@ -1287,8 +1300,9 @@ export default function TradingJournalPage() {
     }, [pendingUndo, fetchJournalData]);
 
     // ── Format helpers ────────────────────────────────────────────────────────
-    const formatCurrency = (val: number, currency = "EUR") =>
-        new Intl.NumberFormat("en-US", { style: "currency", currency }).format(val);
+    const formatCurrency = (value: number, locale: string) => {
+        return new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }).format(value);
+    };
 
     const formatNumber = (val: number, decimals = 2) =>
         new Intl.NumberFormat("en-US", {
@@ -1531,10 +1545,10 @@ export default function TradingJournalPage() {
                             Open Value ({selectedType === "ALL" ? "Combined" : ASSET_TYPE_LABELS[selectedType]})
                         </span>
                         <div className="text-2xl font-bold mt-2 text-foreground">
-                            {formatCurrency(totalCurrentValueBase, baseCurrency)}
+                            {formatCurrency(totalCurrentValueBase, locale)}
                         </div>
                         <p className="text-xs text-muted-foreground/80 mt-1">
-                            Total Cost Outlay: {formatCurrency(totalCostBase, baseCurrency)}
+                            Total Cost Outlay: {formatCurrency(totalCostBase, locale)}
                         </p>
                     </div>
 
@@ -1549,7 +1563,7 @@ export default function TradingJournalPage() {
                                 }`}
                         >
                             {totalUnrealizedBase >= 0 ? "+" : ""}
-                            {formatCurrency(totalUnrealizedBase, baseCurrency)}
+                            {formatCurrency(totalUnrealizedBase, locale)}
                         </div>
                         <p
                             className={`text-xs mt-1 font-medium ${totalUnrealizedBase >= 0
@@ -1573,7 +1587,7 @@ export default function TradingJournalPage() {
                                 }`}
                         >
                             {totalRealizedBase >= 0 ? "+" : ""}
-                            {formatCurrency(totalRealizedBase, baseCurrency)}
+                            {formatCurrency(totalRealizedBase, locale)}
                         </div>
                         <p className="text-xs text-muted-foreground/80 mt-1">
                             Net gains/losses from liquidated entries
@@ -1683,12 +1697,12 @@ export default function TradingJournalPage() {
                                                             {formatNumber(row.quantity_held, qtyDp)}
                                                         </td>
                                                         <td className="p-4 text-right font-mono text-foreground/80">
-                                                            {formatCurrency(row.avg_cost_per_unit_local, row.local_currency)}
+                                                            {formatCurrency(row.avg_cost_per_unit_local, locale)}
                                                         </td>
                                                         <td className="p-4 text-right font-mono text-foreground/80">
                                                             {row.current_price != null ? (
                                                                 <>
-                                                                    {formatCurrency(row.current_price, row.local_currency)}
+                                                                    {formatCurrency(row.current_price, locale)}
                                                                     {row.price_as_of && (
                                                                         <div className="text-[10px] font-sans text-muted-foreground/70 mt-0.5">
                                                                             {new Date(row.price_as_of).toLocaleDateString(undefined, {
@@ -1708,19 +1722,19 @@ export default function TradingJournalPage() {
                                                         </td>
                                                         <td className="p-4 text-right font-mono text-foreground font-medium">
                                                             {row.current_value_base != null
-                                                                ? formatCurrency(row.current_value_base, baseCurrency)
+                                                                ? formatCurrency(row.current_value_base, locale)
                                                                 : <span className="text-muted-foreground">—</span>
                                                             }
                                                         </td>
                                                         <td className={`p-4 text-right font-mono font-semibold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                                                             {row.unrealized_pnl_base != null
-                                                                ? `${isPositive ? "+" : ""}${formatCurrency(pnlBase, baseCurrency)}`
+                                                                ? `${isPositive ? "+" : ""}${formatCurrency(pnlBase, locale)}`
                                                                 : <span className="text-muted-foreground">—</span>
                                                             }
                                                         </td>
                                                         <td className={`p-4 text-right font-mono text-xs ${fxEffect >= 0 ? "text-emerald-600 dark:text-emerald-500/90" : "text-rose-600 dark:text-rose-500/90"}`}>
                                                             {row.fx_effect != null
-                                                                ? `${fxEffect >= 0 ? "▲ +" : "▼ "}${formatCurrency(fxEffect, baseCurrency)}`
+                                                                ? `${fxEffect >= 0 ? "▲ +" : "▼ "}${formatCurrency(fxEffect, locale)}`
                                                                 : "—"
                                                             }
                                                         </td>
@@ -1741,6 +1755,7 @@ export default function TradingJournalPage() {
                                                             formatCurrency={formatCurrency}
                                                             formatNumber={formatNumber}
                                                             baseCurrency={baseCurrency}
+                                                            locale={locale}
                                                         />
                                                     )}
                                                 </React.Fragment>
@@ -1835,17 +1850,17 @@ export default function TradingJournalPage() {
                                                             )}
                                                         </td>
                                                         <td className="p-4 text-right font-mono text-muted-foreground">
-                                                            {formatCurrency(group.total_cost_basis_base, baseCurrency)}
+                                                            {formatCurrency(group.total_cost_basis_base, locale)}
                                                         </td>
                                                         <td className="p-4 text-right font-mono text-foreground/80">
-                                                            {formatCurrency(group.total_proceeds_base, baseCurrency)}
+                                                            {formatCurrency(group.total_proceeds_base, locale)}
                                                         </td>
                                                         <td className={`p-4 text-right font-mono font-semibold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                                                            {isPositive ? "+" : ""}{formatCurrency(pnl, baseCurrency)}
+                                                            {isPositive ? "+" : ""}{formatCurrency(pnl, locale)}
                                                         </td>
                                                         <td className={`p-4 text-right font-mono text-xs ${fxEffect >= 0 ? "text-emerald-600 dark:text-emerald-500/90" : "text-rose-600 dark:text-rose-500/90"}`}>
                                                             {fxEffect >= 0 ? "▲ +" : "▼ "}
-                                                            {formatCurrency(fxEffect, baseCurrency)}
+                                                            {formatCurrency(fxEffect, locale)}
                                                         </td>
                                                         <td className={`p-4 text-right font-mono font-bold ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                                                             {group.realized_pnl_pct != null
@@ -1862,6 +1877,7 @@ export default function TradingJournalPage() {
                                                             formatCurrency={formatCurrency}
                                                             formatNumber={formatNumber}
                                                             baseCurrency={baseCurrency}
+                                                            locale={locale}
                                                         />
                                                     )}
                                                 </React.Fragment>
