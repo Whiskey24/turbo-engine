@@ -353,8 +353,8 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                         <button
                             onClick={() => switchType("BUY")}
                             className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${!isSell
-                                    ? "bg-emerald-600 text-white shadow"
-                                    : "text-muted-foreground hover:text-foreground"
+                                ? "bg-emerald-600 text-white shadow"
+                                : "text-muted-foreground hover:text-foreground"
                                 }`}
                         >
                             Buy
@@ -362,8 +362,8 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                         <button
                             onClick={() => switchType("SELL")}
                             className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${isSell
-                                    ? "bg-rose-600 text-white shadow"
-                                    : "text-muted-foreground hover:text-foreground"
+                                ? "bg-rose-600 text-white shadow"
+                                : "text-muted-foreground hover:text-foreground"
                                 }`}
                         >
                             Sell
@@ -709,8 +709,8 @@ function TradeModal({ baseCurrency, onClose, onSuccess }: TradeModalProps) {
                         onClick={handleSubmit}
                         disabled={submitting || loadingAssets}
                         className={`px-5 py-2 text-sm font-semibold rounded-lg text-white transition shadow disabled:opacity-50 ${isSell
-                                ? "bg-rose-600 hover:bg-rose-700"
-                                : "bg-emerald-600 hover:bg-emerald-700"
+                            ? "bg-rose-600 hover:bg-rose-700"
+                            : "bg-emerald-600 hover:bg-emerald-700"
                             }`}
                     >
                         {submitting ? "Submitting…" : isSell ? "Record Sell" : "Record Buy"}
@@ -817,8 +817,8 @@ function LotSubRows({ lots, loading, parent, colSpan, formatCurrency, formatNumb
                                             </td>
                                             <td className={cellCls + " text-muted-foreground"}>
                                                 <span className={`inline-block px-1.5 py-0.5 rounded font-mono text-[10px] ${ageDays >= 365
-                                                        ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400"
-                                                        : "bg-muted text-muted-foreground"
+                                                    ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400"
+                                                    : "bg-muted text-muted-foreground"
                                                     }`}>
                                                     {ageDays >= 365
                                                         ? `${(ageDays / 365).toFixed(1)}y`
@@ -987,8 +987,8 @@ function RealizedLotSubRows({ group, colSpan, formatCurrency, formatNumber, base
                                         </td>
                                         <td className={cellCls}>
                                             <span className={`inline-block px-1.5 py-0.5 rounded font-mono text-[10px] ${lot.is_long_term
-                                                    ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400"
-                                                    : "bg-muted text-muted-foreground"
+                                                ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400"
+                                                : "bg-muted text-muted-foreground"
                                                 }`}>
                                                 {lot.held_days >= 365
                                                     ? `${(lot.held_days / 365).toFixed(1)}y`
@@ -1377,8 +1377,8 @@ export default function TradingJournalPage() {
                         <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-2">
                                 <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded ${pendingUndo.transactionType === "BUY"
-                                        ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400"
-                                        : "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400"
+                                    ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400"
+                                    : "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400"
                                     }`}>
                                     {pendingUndo.transactionType}
                                 </span>
@@ -1506,8 +1506,8 @@ export default function TradingJournalPage() {
                         </span>
                         <div
                             className={`text-2xl font-bold mt-2 ${totalUnrealizedBase >= 0
-                                    ? "text-emerald-600 dark:text-emerald-400"
-                                    : "text-rose-600 dark:text-rose-400"
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-rose-600 dark:text-rose-400"
                                 }`}
                         >
                             {totalUnrealizedBase >= 0 ? "+" : ""}
@@ -1515,8 +1515,8 @@ export default function TradingJournalPage() {
                         </div>
                         <p
                             className={`text-xs mt-1 font-medium ${totalUnrealizedBase >= 0
-                                    ? "text-emerald-600 dark:text-emerald-500"
-                                    : "text-rose-600 dark:text-rose-500"
+                                ? "text-emerald-600 dark:text-emerald-500"
+                                : "text-rose-600 dark:text-rose-500"
                                 }`}
                         >
                             {totalUnrealizedPct >= 0 ? "+" : ""}
@@ -1530,8 +1530,8 @@ export default function TradingJournalPage() {
                         </span>
                         <div
                             className={`text-2xl font-bold mt-2 ${totalRealizedBase >= 0
-                                    ? "text-emerald-600 dark:text-emerald-400"
-                                    : "text-rose-600 dark:text-rose-400"
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-rose-600 dark:text-rose-400"
                                 }`}
                         >
                             {totalRealizedBase >= 0 ? "+" : ""}
@@ -1548,8 +1548,8 @@ export default function TradingJournalPage() {
                     <button
                         onClick={() => setActiveTab("unrealized")}
                         className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${activeTab === "unrealized"
-                                ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-muted/40"
-                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-muted/40"
+                            : "border-transparent text-muted-foreground hover:text-foreground"
                             }`}
                     >
                         Open Positions ({filteredUnrealized.length})
@@ -1557,8 +1557,8 @@ export default function TradingJournalPage() {
                     <button
                         onClick={() => setActiveTab("realized")}
                         className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${activeTab === "realized"
-                                ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-muted/40"
-                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-muted/40"
+                            : "border-transparent text-muted-foreground hover:text-foreground"
                             }`}
                     >
                         Closed History ({groupedRealized.length})
@@ -1648,10 +1648,25 @@ export default function TradingJournalPage() {
                                                             {formatCurrency(row.avg_cost_per_unit_local, row.local_currency)}
                                                         </td>
                                                         <td className="p-4 text-right font-mono text-foreground/80">
-                                                            {row.current_price != null
-                                                                ? formatCurrency(row.current_price, row.local_currency)
-                                                                : <span className="text-muted-foreground">—</span>
-                                                            }
+                                                            {row.current_price != null ? (
+                                                                <>
+                                                                    {formatCurrency(row.current_price, row.local_currency)}
+                                                                    {row.price_as_of && (
+                                                                        <div className="text-[10px] font-sans text-muted-foreground/70 mt-0.5">
+                                                                            {new Date(row.price_as_of).toLocaleDateString(undefined, {
+                                                                                year: "numeric", month: "short", day: "numeric",
+                                                                            })}
+                                                                        </div>
+                                                                    )}
+                                                                    {row.asset_type === "BOND" && row.nominal_value != null && row.nominal_value > 0 && (
+                                                                        <div className="text-[10px] font-sans text-indigo-500 dark:text-indigo-400 mt-0.5">
+                                                                            {((row.current_price / row.nominal_value) * 100).toFixed(2)}%
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-muted-foreground">—</span>
+                                                            )}
                                                         </td>
                                                         <td className="p-4 text-right font-mono text-foreground font-medium">
                                                             {row.current_value_base != null

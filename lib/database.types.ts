@@ -543,6 +543,7 @@ export type Database = {
           unrealized_pnl_base: number | null
           fx_effect: number | null
           unrealized_pnl_pct: number | null
+          nominal_value: number | null   // bond face/par value per unit; null for non-bonds
         }
         Insert: never
         Update: never
@@ -572,6 +573,7 @@ export type Database = {
           realized_pnl_base: number
           realized_pnl_pct: number | null
           fx_effect: number
+          nominal_value: number | null   // bond face/par value per unit; null for non-bonds
         }
         Insert: never
         Update: never
