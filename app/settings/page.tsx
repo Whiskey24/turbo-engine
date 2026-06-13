@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import DataTransferActions from "@/components/data-transfer-actions";
 import DeleteAllDataAction from "@/components/delete-all-data-action";
 import DeleteAccountAction from "@/components/delete-account-action";
@@ -12,6 +13,7 @@ import { hasPortfolioData } from "@/lib/database";
 
 export default function SettingsPage() {
   const [hasData, setHasData] = useState<boolean | null>(null);
+  const [isSampleDataOpen, setIsSampleDataOpen] = useState(false);
 
   const checkHasData = () => {
     hasPortfolioData().then(setHasData).catch(() => setHasData(false));
@@ -78,14 +80,29 @@ export default function SettingsPage() {
 
           {/* Sample & Test Data — spans full width on md+ */}
           <div className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm md:col-span-2">
-            <h2 className="text-lg font-semibold mb-2">Sample & Test Data</h2>
-            <p className="text-sm text-muted-foreground mb-0">
-              Download ready-to-import example files. The sample set illustrates the
-              column format for each file type. The 10-year dataset covers all asset
-              classifications and includes a validation reference so you can verify
-              FIFO realized P&L, coupon income, and year-end balance totals.
-            </p>
-            <TestDataDownload />
+            <button
+              className="flex w-full items-center justify-between text-left"
+              onClick={() => setIsSampleDataOpen((prev) => !prev)}
+              aria-expanded={isSampleDataOpen}
+            >
+              <h2 className="text-lg font-semibold">Sample & Test Data</h2>
+              {isSampleDataOpen ? (
+                <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
+              ) : (
+                <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+              )}
+            </button>
+            {isSampleDataOpen && (
+              <div className="mt-2">
+                <p className="text-sm text-muted-foreground mb-0">
+                  Download ready-to-import example files. The sample set illustrates the
+                  column format for each file type. The 10-year dataset covers all asset
+                  classifications and includes a validation reference so you can verify
+                  FIFO realized P&L, coupon income, and year-end balance totals.
+                </p>
+                <TestDataDownload />
+              </div>
+            )}
           </div>
 
         </div>
