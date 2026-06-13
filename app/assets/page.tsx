@@ -6,7 +6,7 @@ import { LayoutGrid, Table, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-re
 
 import { supabase } from "@/lib/supabase";
 import type { AssetType, PortfolioAssetWithType } from "@/lib/database";
-import { ASSET_TYPE_SLUGS, getUserSettings } from "@/lib/database";
+import { ASSET_TYPE_SLUGS, COUPON_FREQUENCY_LABELS, getUserSettings } from "@/lib/database";
 import { usePortfolioDataRefresh } from "@/lib/portfolio-refresh";
 import { formatIBAN } from "@/lib/utils";
 
@@ -20,8 +20,11 @@ const ASSET_TYPE_LABELS: Record<typeof ASSET_TYPE_SLUGS[number], string> = {
     OTHER: "Other Assets / Miscellaneous",
 };
 
+const PERPETUAL_DATE = "9999-12-31";
+
 const formatDate = (dateStr: string, locale: string) => {
     if (!dateStr) return "";
+    if (dateStr === PERPETUAL_DATE) return "Perpetual";
     const [year, month, day] = dateStr.split("-").map(Number);
     return new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(new Date(year, month - 1, day));
 };
@@ -263,6 +266,19 @@ export default function AssetsPage() {
                                     {asset.iban && <p><span className="font-medium text-foreground">IBAN:</span> {formatIBAN(asset.iban)}</p>}
                                     {asset.ticker && <p><span className="font-medium text-foreground">Ticker:</span> {asset.ticker}</p>}
                                     {asset.isin && <p><span className="font-medium text-foreground">ISIN:</span> {asset.isin}</p>}
+                                    {asset.type_slug === "BOND" && asset.coupon_rate != null && (
+                                        <p>
+                                            <span className="font-medium text-foreground">Coupon:</span>{" "}
+                                            {(asset.coupon_rate * 100).toFixed(2)}%
+                                            {asset.coupon_frequency != null && ` · ${COUPON_FREQUENCY_LABELS[asset.coupon_frequency as keyof typeof COUPON_FREQUENCY_LABELS] ?? asset.coupon_frequency + "×/yr"}`}
+                                        </p>
+                                    )}
+                                    {asset.type_slug === "BOND" && asset.maturity_date && (
+                                        <p>
+                                            <span className="font-medium text-foreground">Maturity:</span>{" "}
+                                            {formatDate(asset.maturity_date, locale)}
+                                        </p>
+                                    )}
                                     {latestValuations[asset.id] ? (
                                         <div className="flex justify-between items-center border-t pt-1.5 mt-1.5 text-foreground">
                                             <span>Last Valuation: <strong className="font-medium">{formatDate(latestValuations[asset.id].valuation_date, locale)}</strong></span>
@@ -360,7 +376,17 @@ export default function AssetsPage() {
                                                 {asset.iban && <div><span className="text-[9px] font-sans font-medium text-foreground/70 mr-1">[IBAN]</span>{formatIBAN(asset.iban)}</div>}
                                                 {asset.ticker && <div><span className="text-[9px] font-sans font-medium text-foreground/70 mr-1">[TICK]</span>{asset.ticker}</div>}
                                                 {asset.isin && <div><span className="text-[9px] font-sans font-medium text-foreground/70 mr-1">[ISIN]</span>{asset.isin}</div>}
-                                                {!asset.iban && !asset.ticker && !asset.isin && (
+                                                {asset.type_slug === "BOND" && asset.coupon_rate != null && (
+                                                    <div>
+                                                        <span className="text-[9px] font-sans font-medium text-foreground/70 mr-1">[CPRT]</span>
+                                                        {(asset.coupon_rate * 100).toFixed(2)}%
+                                                        {asset.coupon_frequency != null && ` ${COUPON_FREQUENCY_LABELS[asset.coupon_frequency as keyof typeof COUPON_FREQUENCY_LABELS] ?? ""}`}
+                                                    </div>
+                                                )}
+                                                {asset.type_slug === "BOND" && asset.maturity_date && (
+                                                    <div><span className="text-[9px] font-sans font-medium text-foreground/70 mr-1">[MAT]</span>{formatDate(asset.maturity_date, locale)}</div>
+                                                )}
+                                                {!asset.iban && !asset.ticker && !asset.isin && asset.type_slug !== "BOND" && (
                                                     <span className="italic text-muted-foreground/60 font-sans text-xs">—</span>
                                                 )}
                                             </td>

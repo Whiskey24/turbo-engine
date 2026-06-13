@@ -46,8 +46,11 @@ function getSlugRequirements(slug: string): SlugRequirements {
     }
 }
 
+const PERPETUAL_DATE = "9999-12-31";
+
 const formatDate = (dateStr: string, locale: string) => {
     if (!dateStr) return "";
+    if (dateStr === PERPETUAL_DATE) return "Perpetual";
     const [year, month, day] = dateStr.split("-").map(Number);
     return new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(new Date(year, month - 1, day));
 };
@@ -95,6 +98,7 @@ export default function AssetConfigurationPage() {
     const [couponRate, setCouponRate] = useState("");       // UI: percentage, e.g. "4.5"
     const [couponFrequency, setCouponFrequency] = useState("");
     const [maturityDate, setMaturityDate] = useState("");
+    const [isPerpetual, setIsPerpetual] = useState(false);
     const [firstCouponDate, setFirstCouponDate] = useState("");
     const [dayCountBasis, setDayCountBasis] = useState("30/360");
     const [loadingAsset, setLoadingAsset] = useState(false);
@@ -115,6 +119,7 @@ export default function AssetConfigurationPage() {
     const [editCouponRate, setEditCouponRate] = useState("");
     const [editCouponFrequency, setEditCouponFrequency] = useState("");
     const [editMaturityDate, setEditMaturityDate] = useState("");
+    const [editIsPerpetual, setEditIsPerpetual] = useState(false);
     const [editFirstCouponDate, setEditFirstCouponDate] = useState("");
     const [editDayCountBasis, setEditDayCountBasis] = useState("30/360");
     const [loadingEdit, setLoadingEdit] = useState(false);
@@ -211,7 +216,7 @@ export default function AssetConfigurationPage() {
         setAssetName(""); setInstitution(""); setLoginUrl(""); setComments("");
         setIban(""); setTicker(""); setIsin(""); setAssetSlug("");
         setNominalValue(""); setCouponRate(""); setCouponFrequency("");
-        setMaturityDate(""); setFirstCouponDate(""); setDayCountBasis("30/360");
+        setMaturityDate(""); setIsPerpetual(false); setFirstCouponDate(""); setDayCountBasis("30/360");
     };
 
     const buildBondPayload = (
@@ -267,7 +272,9 @@ export default function AssetConfigurationPage() {
         setEditNominalValue(asset.nominal_value != null ? String(asset.nominal_value) : "");
         setEditCouponRate(asset.coupon_rate != null ? String(asset.coupon_rate * 100) : "");
         setEditCouponFrequency(asset.coupon_frequency != null ? String(asset.coupon_frequency) : "");
-        setEditMaturityDate(asset.maturity_date || "");
+        const perpetual = asset.maturity_date === PERPETUAL_DATE;
+        setEditIsPerpetual(perpetual);
+        setEditMaturityDate(perpetual ? PERPETUAL_DATE : (asset.maturity_date || ""));
         setEditFirstCouponDate(asset.first_coupon_date || "");
         setEditDayCountBasis(asset.day_count_basis || "30/360");
     };
@@ -479,6 +486,7 @@ export default function AssetConfigurationPage() {
                                     cRate={couponRate} setCRate={setCouponRate}
                                     cFreq={couponFrequency} setCFreq={setCouponFrequency}
                                     mDate={maturityDate} setMDate={setMaturityDate}
+                                    isPerpetual={isPerpetual} setIsPerpetual={setIsPerpetual}
                                     fcDate={firstCouponDate} setFcDate={setFirstCouponDate}
                                     dcBasis={dayCountBasis} setDcBasis={setDayCountBasis}
                                     required
@@ -759,6 +767,7 @@ export default function AssetConfigurationPage() {
                                     cRate={editCouponRate} setCRate={setEditCouponRate}
                                     cFreq={editCouponFrequency} setCFreq={setEditCouponFrequency}
                                     mDate={editMaturityDate} setMDate={setEditMaturityDate}
+                                    isPerpetual={editIsPerpetual} setIsPerpetual={setEditIsPerpetual}
                                     fcDate={editFirstCouponDate} setFcDate={setEditFirstCouponDate}
                                     dcBasis={editDayCountBasis} setDcBasis={setEditDayCountBasis}
                                     required
@@ -817,85 +826,120 @@ const SlugRequirementsPreview = ({ reqs }: { reqs: SlugRequirements }) => {
 
 const BondFields = ({
     nomVal, setNomVal, cRate, setCRate, cFreq, setCFreq,
-    mDate, setMDate, fcDate, setFcDate, dcBasis, setDcBasis,
+    mDate, setMDate, isPerpetual, setIsPerpetual,
+    fcDate, setFcDate, dcBasis, setDcBasis,
     required = false,
 }: {
     nomVal: string; setNomVal: (v: string) => void;
     cRate: string; setCRate: (v: string) => void;
     cFreq: string; setCFreq: (v: string) => void;
     mDate: string; setMDate: (v: string) => void;
+    isPerpetual: boolean; setIsPerpetual: (v: boolean) => void;
     fcDate: string; setFcDate: (v: string) => void;
     dcBasis: string; setDcBasis: (v: string) => void;
     required?: boolean;
-}) => (
-    <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 border rounded-md p-4 bg-muted/30">
-        <p className="md:col-span-2 text-xs font-semibold text-muted-foreground -mb-2">Bond Parameters</p>
+}) => {
+    const handlePerpetualChange = (checked: boolean) => {
+        setIsPerpetual(checked);
+        if (checked) {
+            setMDate(PERPETUAL_DATE);
+        } else {
+            setMDate("");
+        }
+    };
 
-        {/* Nominal Value */}
-        <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Nominal Value (face value per bond)</label>
-            <input
-                type="text"
-                inputMode="decimal"
-                value={nomVal}
-                onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
-                        setNomVal(val);
-                    }
-                }}
-                placeholder="e.g. 1000"
-                className="border rounded-md p-2 bg-background text-sm"
-                required={required}
-            />
-        </div>
+    return (
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 border rounded-md p-4 bg-muted/30">
+            <p className="md:col-span-2 text-xs font-semibold text-muted-foreground -mb-2">Bond Parameters</p>
 
-        {/* Annual Coupon Rate */}
-        <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Annual Coupon Rate (%)</label>
-            <input
-                type="text"
-                inputMode="decimal"
-                value={cRate}
-                onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
-                        setCRate(val);
-                    }
-                }}
-                placeholder="e.g. 4.5"
-                className="border rounded-md p-2 bg-background text-sm"
-                required={required}
-            />
-        </div>
+            {/* Nominal Value */}
+            <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Nominal Value (face value per bond)</label>
+                <input
+                    type="text"
+                    inputMode="decimal"
+                    value={nomVal}
+                    onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                            setNomVal(val);
+                        }
+                    }}
+                    placeholder="e.g. 1000"
+                    className="border rounded-md p-2 bg-background text-sm"
+                    required={required}
+                />
+            </div>
 
-        <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Coupon Frequency</label>
-            <select value={cFreq} onChange={(e) => setCFreq(e.target.value)}
-                className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" required={required}>
-                <option value="" disabled>-- Select frequency --</option>
-                {COUPON_FREQUENCIES.map((f) => <option key={f} value={f}>{COUPON_FREQUENCY_LABELS[f]}</option>)}
-            </select>
-        </div>
+            {/* Annual Coupon Rate */}
+            <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Annual Coupon Rate (%)</label>
+                <input
+                    type="text"
+                    inputMode="decimal"
+                    value={cRate}
+                    onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                            setCRate(val);
+                        }
+                    }}
+                    placeholder="e.g. 4.5"
+                    className="border rounded-md p-2 bg-background text-sm"
+                    required={required}
+                />
+            </div>
 
-        <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Maturity Date</label>
-            <input type="date" value={mDate} onChange={(e) => setMDate(e.target.value)}
-                className="border rounded-md p-2 bg-background text-sm" required={required} />
-        </div>
+            <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Coupon Frequency</label>
+                <select value={cFreq} onChange={(e) => setCFreq(e.target.value)}
+                    className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" required={required}>
+                    <option value="" disabled>-- Select frequency --</option>
+                    {COUPON_FREQUENCIES.map((f) => <option key={f} value={f}>{COUPON_FREQUENCY_LABELS[f]}</option>)}
+                </select>
+            </div>
 
-        <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">First Coupon Date <span className="font-normal text-muted-foreground">(optional)</span></label>
-            <input type="date" value={fcDate} onChange={(e) => setFcDate(e.target.value)}
-                className="border rounded-md p-2 bg-background text-sm" />
-        </div>
+            <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-muted-foreground">Maturity Date</label>
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={isPerpetual}
+                            onChange={(e) => handlePerpetualChange(e.target.checked)}
+                            className="h-3.5 w-3.5 rounded accent-primary cursor-pointer"
+                        />
+                        <span className="text-xs text-muted-foreground font-medium">Perpetual</span>
+                    </label>
+                </div>
+                {isPerpetual ? (
+                    <div className="border rounded-md p-2 bg-muted/50 text-sm text-muted-foreground italic">
+                        No maturity — perpetual bond
+                    </div>
+                ) : (
+                    <input
+                        type="date"
+                        value={mDate}
+                        onChange={(e) => setMDate(e.target.value)}
+                        className="border rounded-md p-2 bg-background text-sm"
+                        required={required}
+                    />
+                )}
+            </div>
 
-        <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Day-Count Basis <span className="font-normal text-muted-foreground">(optional)</span></label>
-            <select value={dcBasis} onChange={(e) => setDcBasis(e.target.value)}
-                className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                {DAY_COUNT_BASES.map((b) => <option key={b} value={b}>{b}</option>)}
-            </select>
+            <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">First Coupon Date <span className="font-normal text-muted-foreground">(optional)</span></label>
+                <input type="date" value={fcDate} onChange={(e) => setFcDate(e.target.value)}
+                    className="border rounded-md p-2 bg-background text-sm" />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Day-Count Basis <span className="font-normal text-muted-foreground">(optional)</span></label>
+                <select value={dcBasis} onChange={(e) => setDcBasis(e.target.value)}
+                    className="border rounded-md p-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                    {DAY_COUNT_BASES.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+            </div>
         </div>
-    </div>
-);
+    );
+};
